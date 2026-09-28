@@ -32,15 +32,17 @@ const ANIME_PATTERNS = {
      }
   },
   "otakudesu.blog": {
-    extract: (url) => {
+    extract: (url, doc) => {
        const parts = url.pathname.split('/').filter(Boolean);
        if (parts[0] !== 'episode' && !parts[0].includes('episode')) return null;
+       
        const slug = parts[0]; 
        const epMatch = slug.match(/(.+)-episode-(\d+(\.\d)?)/);
        if (!epMatch) return null;
        
-       const title = epMatch[1].replace(/-/g, ' ');
-       return { raw_title: title, progress: parseFloat(epMatch[2]) };
+       let title = epMatch[1].replace(/-/g, ' ');
+       title = title.replace(/ sub indo/ig, '');
+       return { raw_title: title.trim(), progress: parseFloat(epMatch[2]) };
     }
   },
   "gogoanime": {

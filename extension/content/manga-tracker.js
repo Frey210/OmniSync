@@ -4,7 +4,7 @@
 
 const MANGA_PATTERNS = {
   "komiku.id": {
-    extract: (url) => {
+    extract: (url, doc) => {
       const parts = url.pathname.split('/').filter(Boolean);
       const lastPart = parts[parts.length - 1]; 
       if (!lastPart || !lastPart.includes('chapter')) return null;
@@ -15,7 +15,7 @@ const MANGA_PATTERNS = {
     }
   },
   "shinigami.asia": {
-    extract: (url) => {
+    extract: (url, doc) => {
       const parts = url.pathname.split('/').filter(Boolean);
       if (parts[0] !== 'series' || !parts[2] || !parts[2].includes('chapter')) return null;
       
@@ -25,13 +25,19 @@ const MANGA_PATTERNS = {
     }
   },
   "mangafire.to": {
-    extract: (url) => {
+    extract: (url, doc) => {
        const parts = url.pathname.split('/').filter(Boolean);
-       if (parts[0] !== 'manga' || !parts[2] || !parts[2].includes('chapter')) return null;
+       if (parts[0] !== 'title' && parts[0] !== 'manga') return null;
+       if (!url.pathname.includes('chapter')) return null;
        
-       const titlePart = parts[1].split('.')[0];
-       const title = titlePart.replace(/-/g, ' ');
-       const chapter = parseFloat(parts[2].replace('chapter-', ''));
+       let title = parts[1].split('.')[0].replace(/-/g, ' ');
+       // mangafire uses a random prefix like "2p9nq-everyones-darling"
+       title = title.replace(/^[a-z0-9]+ /i, '').trim(); 
+       
+       // Try DOM title for chapter since URL just has an ID
+       const titleMatch = doc.title.match(/Chapter (\d+(\.\d)?)/i);
+       const chapter = titleMatch ? parseFloat(titleMatch[1]) : 1;
+       
        return { raw_title: title, progress: chapter };
     }
   }
