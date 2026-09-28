@@ -1,13 +1,8 @@
-// Supabase configuration - these should ideally match the loaded .env or be injected
+// Supabase configuration
 const SUPABASE_URL = "YOUR_SUPABASE_URL_HERE"; 
 const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY_HERE";
 
-/**
- * Perform login via Supabase GoTrue API
- * @param {string} email 
- * @param {string} password 
- */
-export async function signIn(email, password) {
+async function signIn(email, password) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: {
@@ -23,7 +18,6 @@ export async function signIn(email, password) {
     throw new Error(data.error_description || data.msg);
   }
 
-  // Save session directly to chrome storage
   await chrome.storage.local.set({ 
     supabase_session: {
       access_token: data.access_token,
@@ -36,24 +30,21 @@ export async function signIn(email, password) {
   return data.user;
 }
 
-export async function signOut() {
+async function signOut() {
   await chrome.storage.local.remove('supabase_session');
 }
 
-export async function getSession() {
+async function getSession() {
   const result = await chrome.storage.local.get('supabase_session');
   return result.supabase_session || null;
 }
 
-export async function getAccessToken() {
+async function getAccessToken() {
   const session = await getSession();
   if (!session) return null;
   
-  // Basic check for expiration (with 60sec margin)
   const now = Math.floor(Date.now() / 1000);
   if (session.expires_at < now + 60) {
-     // TODO: Implement refresh token mechanism if needed
-     // For simplicity in this demo, return null and force re-login if expired
      return null; 
   }
   return session.access_token;

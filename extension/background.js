@@ -1,4 +1,4 @@
-import { syncProgress } from './utils/api.js';
+importScripts('utils/auth.js', 'utils/api.js');
 
 console.log("OmniSync Background Worker initialized.");
 

@@ -1,13 +1,7 @@
-import { getAccessToken } from './auth.js';
+const API_BASE = "https://api.farlabs.my.id/api";
 
-// Base URL for the Vercel server. Change this for local testing (e.g. http://localhost:3000/api)
-const API_BASE = "https://api.farlabs.my.id/api"; // or "http://localhost:3000/api" for dev
-
-/**
- * Helper for making authenticated requests to our Vercel backend
- */
 async function apiFetch(endpoint, options = {}) {
-  const token = await getAccessToken();
+  const token = await getAccessToken(); // uses global from auth.js
   if (!token) {
     throw new Error('Not authenticated');
   }
@@ -28,19 +22,17 @@ async function apiFetch(endpoint, options = {}) {
     throw new Error(data.error || 'API Request Failed');
   }
 
-  // Handle nested data structures correctly based on our backend responses
   return data;
 }
 
-export async function syncProgress(payload) {
+async function syncProgress(payload) {
   return await apiFetch('/sync', {
     method: 'POST',
     body: JSON.stringify(payload)
   });
 }
 
-export async function getProgress() {
+async function getProgress() {
   const response = await apiFetch('/progress', { method: 'GET' });
-  // the Vercel API wraps array in { data: progress }
   return response.data || [];
 }

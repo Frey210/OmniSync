@@ -1,5 +1,4 @@
-import { signIn, signOut, getSession } from '../utils/auth.js';
-import { getProgress } from '../utils/api.js';
+// auth.js and api.js are loaded via html script tags now
 
 const ui = {
   authView: document.getElementById('auth-view'),
