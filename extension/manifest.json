@@ -11,7 +11,9 @@
     "*://ylnime.com/*",
     "*://v1.animesail.xyz/*",
     "*://otakudesu.blog/*",
-    "*://*.gogoanime.*/*",
+    "*://*.gogoanime.com/*",
+    "*://*.gogoanime.pe/*",
+    "*://*.anitaku.to/*",
     "https://api.farlabs.my.id/*"
   ],
   "background": {
@@ -31,7 +33,9 @@
         "*://ylnime.com/*",
         "*://v1.animesail.xyz/*",
         "*://otakudesu.blog/*",
-        "*://*.gogoanime.*/*"
+        "*://*.gogoanime.com/*",
+        "*://*.gogoanime.pe/*",
+        "*://*.anitaku.to/*"
       ],
       "js": ["content/anime-tracker.js"]
     }
