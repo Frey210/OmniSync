@@ -46,8 +46,18 @@ async function findAndCacheMedia(title, type) {
   return normalized.media_id;
 }
 
+function generatePseudoId(title) {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) {
+    const char = title.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  // Make it a positive integer safely out of AniList range (e.g. 2,000,000,000 + abs(hash))
+  return 2000000000 + Math.abs(hash);
+}
+
 export default async function handler(req, res) {
-  // CORS check (handled in vercel.json mostly, but good for OPTIONS)
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -80,10 +90,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    const media_id = await findAndCacheMedia(raw_title, type);
+    let media_id = await findAndCacheMedia(raw_title, type);
+    
+    // FALLBACK: If AniList 404s, generate pseudo ID and cache it anyway
     if (!media_id) {
-       return res.status(404).json({ error: 'Media not found on AniList' });
+       media_id = generatePseudoId(raw_title);
+       await supabase.from('media_metadata').upsert({
+          media_id,
+          canonical_title: (raw_title.charAt(0).toUpperCase() + raw_title.slice(1)), // Capitalize
+          cover_image_url: 'https://via.placeholder.com/150x200.png?text=No+Cover', // Placeholder
+          media_type: type.toUpperCase(),
+          total_episodes_chapters: null
+       }, { onConflict: 'media_id' });
     }
+
     
     // Check existing progress to prevent downgrading (if needed)
     // For now we'll do an upsert but ensure latest_chapter_episode doesn't go down
