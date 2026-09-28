@@ -98,16 +98,14 @@ function processAnimePage() {
   if (data && data.raw_title && data.progress) {
     console.log("[OmniSync] Found Anime Episode. Waiting for 80% watch time...", data);
     
-    // Find video tag
+    let attempts = 0;
     const observeVideo = setInterval(() => {
-        // Grab first video tag, or wait if it's rendered dynamically/in shadow DOM (some sites use iframes though).
-        // Warning: if it's an iframe (like many anime streaming sites), we can't easily read timeupdate due to cross-origin.
-        // For this PRD scope, we check document.querySelector('video')
+        attempts++;
         const video = document.querySelector('video');
+        
         if (video) {
             clearInterval(observeVideo);
             console.log("[OmniSync] Video player attached.");
-            
             video.addEventListener('timeupdate', () => {
                 if (video.duration > 0 && !hasSyncedCurrentEpisode) {
                     const pct = video.currentTime / video.duration;
@@ -116,11 +114,18 @@ function processAnimePage() {
                     }
                 }
             });
+        } else if (attempts >= 10) {
+            // Fallback for Ylnime, Otakudesu, etc. that use Cross-Origin Iframes
+            // We cannot access <video> inside cross-domain frames.
+            clearInterval(observeVideo);
+            console.log("[OmniSync] No direct <video> found (likely an Iframe). Using fallback dwell-time sync...");
+            
+            // Sync immediately after 30 seconds of dwell time instead of timeupdate
+            setTimeout(() => {
+                syncAnimeProgress(data);
+            }, 30000); 
         }
-    }, 1500);
-    
-    // Stop trying after 30 seconds
-    setTimeout(() => clearInterval(observeVideo), 30000);
+    }, 1000);
   }
 }
 
