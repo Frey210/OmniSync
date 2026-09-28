@@ -8,7 +8,10 @@
 </head>
 <body>
   <div id="header">
-    <h2>OmniSync</h2>
+    <div class="logo-box">
+       <div class="logo-icon"></div>
+       <h2>OmniSync</h2>
+    </div>
     <div id="user-info" class="hidden">
        <span id="user-email"></span>
        <button id="logout-btn" class="sm-btn">Logout</button>
@@ -16,31 +19,49 @@
   </div>
 
   <div id="auth-view">
-    <p>Sign in to sync your anime and manga progress across devices.</p>
-    <div class="input-group">
-      <input type="email" id="email" placeholder="Email" />
+    <div class="auth-card">
+       <h3 id="auth-title">Welcome Back</h3>
+       <p id="auth-subtitle">Sign in to sync your library across devices.</p>
+       <div class="input-group">
+         <input type="email" id="email" placeholder="Email Address" />
+       </div>
+       <div class="input-group">
+         <input type="password" id="password" placeholder="Password" />
+       </div>
+       <button id="auth-submit-btn" class="primary-btn">Sign In</button>
+       <p id="auth-error" class="error-msg hidden"></p>
+       <p class="auth-switch">
+         <span id="auth-switch-text">Don't have an account?</span> 
+         <a href="#" id="auth-toggle-link">Sign Up</a>
+       </p>
     </div>
-    <div class="input-group">
-      <input type="password" id="password" placeholder="Password" />
-    </div>
-    <button id="login-btn" class="primary-btn">Sign In</button>
-    <p id="auth-error" class="error-msg hidden"></p>
   </div>
 
   <div id="dashboard-view" class="hidden">
-    <div class="tabs">
-      <button class="active">Recent Activity</button>
+    <div class="controls-container">
+      <div class="search-bar">
+         <input type="text" id="search-input" placeholder="Search your library..." autocomplete="off"/>
+         <svg class="search-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      </div>
+      <div class="filter-tabs">
+        <button class="filter-btn active" data-filter="ALL">All</button>
+        <button class="filter-btn" data-filter="ANIME">Anime</button>
+        <button class="filter-btn" data-filter="MANGA">Manga</button>
+      </div>
     </div>
     
     <div id="loading" class="hidden">
-       <div class="spinner"></div> Loading progress...
+       <div class="spinner"></div>
     </div>
 
     <ul id="progress-list">
        <!-- Items will go here -->
     </ul>
     
-    <p id="empty-state" class="hidden">No tracked progress yet. Read some manga or watch some anime!</p>
+    <div id="empty-state" class="hidden empty-state-box">
+       <div class="empty-icon">📂</div>
+       <p>No titles found.</p>
+    </div>
   </div>
 
   <script src="../utils/auth.js"></script>
