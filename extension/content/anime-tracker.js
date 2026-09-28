@@ -5,14 +5,18 @@
 const ANIME_PATTERNS = {
   "ylnime.com": {
     extract: (url) => {
-      const parts = url.pathname.split('/').filter(Boolean);
-      if (parts[0] !== 'episode') return null;
-      const slug = parts[1];
-      if (!slug || !slug.includes('-episode-')) return null;
-
-      const title = slug.split('-episode-')[0].replace(/-/g, ' ');
-      const episode = parseFloat(slug.split('-episode-')[1]);
-      return { raw_title: title, progress: episode };
+      if (url.searchParams.has('series') && url.searchParams.has('episode')) {
+        let title = url.searchParams.get('series').replace(/-/g, ' ');
+        // clean up descriptive words like "sub ind"
+        title = title.replace(/ sub ind/g, '').replace(/ sub indo/g, '');
+        
+        const epParam = url.searchParams.get('episode');
+        const epMatch = epParam.match(/-(\d+(\.\d)?)$/) || epParam.match(/^(\d+(\.\d)?)$/);
+        const episode = epMatch ? parseFloat(epMatch[1]) : 1; 
+        
+        return { raw_title: title.trim(), progress: episode };
+      }
+      return null;
     }
   },
   "animesail.xyz": {
