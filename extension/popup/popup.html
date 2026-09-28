@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniSync Dashboard</title>
+  <link rel="stylesheet" href="popup.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="header">
+    <h2>OmniSync</h2>
+    <div id="user-info" class="hidden">
+       <span id="user-email"></span>
+       <button id="logout-btn" class="sm-btn">Logout</button>
+    </div>
+  </div>
+
+  <div id="auth-view">
+    <p>Sign in to sync your anime and manga progress across devices.</p>
+    <div class="input-group">
+      <input type="email" id="email" placeholder="Email" />
+    </div>
+    <div class="input-group">
+      <input type="password" id="password" placeholder="Password" />
+    </div>
+    <button id="login-btn" class="primary-btn">Sign In</button>
+    <p id="auth-error" class="error-msg hidden"></p>
+  </div>
+
+  <div id="dashboard-view" class="hidden">
+    <div class="tabs">
+      <button class="active">Recent Activity</button>
+    </div>
+    
+    <div id="loading" class="hidden">
+       <div class="spinner"></div> Loading progress...
+    </div>
+
+    <ul id="progress-list">
+       <!-- Items will go here -->
+    </ul>
+    
+    <p id="empty-state" class="hidden">No tracked progress yet. Read some manga or watch some anime!</p>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

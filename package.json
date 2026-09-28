@@ -1,0 +1,13 @@
+{
+  "name": "omnisync",
+  "version": "1.0.0",
+  "description": "OmniSync - Cross-Platform Anime & Manga Tracker",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.8",
+    "node-fetch": "^3.3.2"
+  }
+}
