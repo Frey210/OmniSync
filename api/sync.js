@@ -95,58 +95,67 @@ export default async function handler(req, res) {
     // FALLBACK: If AniList 404s, generate pseudo ID and cache it anyway
     if (!media_id) {
        media_id = generatePseudoId(raw_title);
-       await supabase.from('media_metadata').upsert({
+       const { error: metaErr } = await supabase.from('media_metadata').upsert({
           media_id,
-          canonical_title: (raw_title.charAt(0).toUpperCase() + raw_title.slice(1)), // Capitalize
-          cover_image_url: 'https://via.placeholder.com/150x200.png?text=No+Cover', // Placeholder
+          canonical_title: (raw_title.charAt(0).toUpperCase() + raw_title.slice(1)),
+          cover_image_url: 'https://via.placeholder.com/150x200.png?text=No+Cover',
           media_type: type.toUpperCase(),
           total_episodes_chapters: null
        }, { onConflict: 'media_id' });
+       if (metaErr) console.error("Media metadata upsert error:", metaErr);
     }
-
     
-    // Check existing progress to prevent downgrading (if needed)
-    // For now we'll do an upsert but ensure latest_chapter_episode doesn't go down
-    // The safest way is to select then upsert, or rely on postgres functions.
-    // We will do a generic Upsert for now.
-    
-    const { data: existing } = await supabase
+    // Check existing progress
+    const { data: existing, error: selectErr } = await supabase
       .from('user_progress')
       .select('latest_chapter_episode, id')
       .eq('user_id', user.id)
       .eq('media_id', media_id)
-      .single();
+      .maybeSingle(); // use maybeSingle to avoid error when no row found
+
+    if (selectErr) {
+      console.error("Select error:", selectErr);
+    }
 
     if (existing && existing.latest_chapter_episode >= progressValue) {
         return res.status(200).json({ 
             success: true, 
-            message: 'Progress equals or exceeds current value, skipping',
+            message: 'Progress already up to date',
             media_id,
             latest_chapter_episode: existing.latest_chapter_episode
         });
     }
 
-    const progressObj = {
-      user_id: user.id,
-      media_id,
-      media_type: type.toUpperCase(),
-      latest_chapter_episode: progressValue,
-      source_url,
-      updated_at: new Date().toISOString()
-    };
-    
-    // If it exists, append the id to force an UPDATE instead of trying to hit the UNIQUE constraint directly via UPSERT if issues occur
+    let dbError;
     if (existing) {
-        progressObj.id = existing.id;
+      // UPDATE existing row
+      const { error } = await supabase
+        .from('user_progress')
+        .update({
+          latest_chapter_episode: progressValue,
+          source_url,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id);
+      dbError = error;
+    } else {
+      // INSERT new row
+      const { error } = await supabase
+        .from('user_progress')
+        .insert({
+          user_id: user.id,
+          media_id,
+          media_type: type.toUpperCase(),
+          latest_chapter_episode: progressValue,
+          source_url,
+          updated_at: new Date().toISOString()
+        });
+      dbError = error;
     }
 
-    const { error: upsertError } = await supabase
-      .from('user_progress')
-      .upsert(progressObj, { onConflict: 'user_id, media_id' });
-
-    if (upsertError) {
-      console.error(upsertError);
-      return res.status(500).json({ error: 'Failed to update progress' });
+    if (dbError) {
+      console.error("DB write error:", dbError);
+      return res.status(500).json({ error: 'Failed to update progress', detail: dbError.message });
     }
 
     return res.status(200).json({
@@ -157,6 +166,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error("Sync error:", err);
-    return res.status(500).json({ error: 'Internal Server Error' });
+    return res.status(500).json({ error: 'Internal Server Error', detail: err.message });
   }
 }
