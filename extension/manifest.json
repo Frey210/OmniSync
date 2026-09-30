@@ -8,8 +8,10 @@
     "*://komiku.id/*",
     "*://11.shinigami.asia/*",
     "*://mangafire.to/*",
+    "*://*.ylnime.com/*",
     "*://ylnime.com/*",
-    "*://v1.animesail.xyz/*",
+    "*://*.animesail.xyz/*",
+    "*://*.otakudesu.blog/*",
     "*://otakudesu.blog/*",
     "*://*.gogoanime.com/*",
     "*://*.gogoanime.pe/*",
@@ -31,13 +33,16 @@
     {
       "matches": [
         "*://ylnime.com/*",
-        "*://v1.animesail.xyz/*",
+        "*://*.ylnime.com/*",
+        "*://*.animesail.xyz/*",
         "*://otakudesu.blog/*",
+        "*://*.otakudesu.blog/*",
         "*://*.gogoanime.com/*",
         "*://*.gogoanime.pe/*",
         "*://*.anitaku.to/*"
       ],
-      "js": ["content/anime-tracker.js"]
+      "js": ["content/anime-tracker.js"],
+      "run_at": "document_idle"
     }
   ],
   "action": {
