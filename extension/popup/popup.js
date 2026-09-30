@@ -108,8 +108,28 @@ function renderList() {
            ${meta.total_episodes_chapters ? `<span style="opacity:0.5">/ ${meta.total_episodes_chapters}</span>` : ''}
         </p>
       </div>
+      <button class="delete-btn" data-id="${item.id}" title="Delete">&times;</button>
       ${item.source_url ? `<a href="${item.source_url}" class="resume-btn" target="_blank">Resume →</a>` : ''}
     `;
+    
+    // Add delete functionality
+    li.querySelector('.delete-btn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const btn = e.target;
+        btn.innerHTML = '...';
+        btn.disabled = true;
+        try {
+            await deleteProgress(item.id);
+            globalDataSet = globalDataSet.filter(d => d.id !== item.id);
+            renderList();
+        } catch (err) {
+            console.error("Delete failed", err);
+            btn.innerHTML = '&times;';
+            btn.disabled = false;
+            alert("Failed to delete item: " + err.message);
+        }
+    });
+
     ui.progressList.appendChild(li);
   });
 }

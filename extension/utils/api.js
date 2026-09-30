@@ -64,3 +64,10 @@ async function getProgress() {
   const response = await apiFetch('/progress', { method: 'GET' });
   return response.data || [];
 }
+
+async function deleteProgress(id) {
+  return await apiFetch('/delete', {
+    method: 'DELETE',
+    body: JSON.stringify({ id })
+  });
+}
