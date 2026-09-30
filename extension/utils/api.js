@@ -1,7 +1,7 @@
 const API_BASE = "https://api.farlabs.my.id/api";
 
 async function apiFetch(endpoint, options = {}) {
-  const token = await getAccessToken(); // uses global from auth.js
+  const token = await getAccessToken();
   if (!token) {
     throw new Error('Not authenticated');
   }
@@ -12,36 +12,44 @@ async function apiFetch(endpoint, options = {}) {
     ...(options.headers || {})
   };
 
-  console.log("[OmniSync API] Fetching:", `${API_BASE}${endpoint}`, options.method || 'GET');
+  const url = `${API_BASE}${endpoint}`;
+  console.log("[OmniSync API]", options.method || 'GET', url);
 
-  let response;
-  try {
-    response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers,
-      mode: 'cors'
-    });
-  } catch (fetchErr) {
-    console.error("[OmniSync API] Network error:", fetchErr);
-    throw new Error(`Network error: ${fetchErr.message}`);
+  // Retry up to 2 times on network errors
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers
+        // ponytail: no explicit mode — service worker handles CORS via host_permissions
+      });
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        throw new Error(`Server returned ${response.status} (non-JSON)`);
+      }
+
+      console.log("[OmniSync API] Response:", response.status, data);
+
+      if (!response.ok) {
+        throw new Error(data.error || `API Error ${response.status}`);
+      }
+      return data;
+
+    } catch (err) {
+      lastErr = err;
+      if (err.message.includes('Failed to fetch') && attempt < 2) {
+        console.log(`[OmniSync API] Retry ${attempt + 1}...`);
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
   }
-
-  let data;
-  try {
-    data = await response.json();
-  } catch (jsonErr) {
-    const text = await response.text().catch(() => '');
-    console.error("[OmniSync API] Non-JSON response:", response.status, text);
-    throw new Error(`Server returned ${response.status}: not JSON`);
-  }
-
-  console.log("[OmniSync API] Response:", response.status, data);
-
-  if (!response.ok) {
-    throw new Error(data.error || `API Error ${response.status}`);
-  }
-
-  return data;
+  throw lastErr;
 }
 
 async function syncProgress(payload) {
