@@ -20,30 +20,49 @@ async function findAndCacheMedia(title, type) {
     }
   `;
 
-  const url = 'https://graphql.anilist.co';
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({ query, variables: { search: title, type: mediaType } })
-  });
+  try {
+    const response = await fetch('https://graphql.anilist.co', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ query, variables: { search: title, type: mediaType } })
+    });
 
-  const data = await response.json();
-  const media = data?.data?.Media;
-  if (!media) return null;
-
-  const normalized = {
-    media_id: media.id,
-    canonical_title: media.title.english || media.title.romaji || media.title.native,
-    cover_image_url: media.coverImage?.large,
-    media_type: mediaType,
-    total_episodes_chapters: mediaType === 'ANIME' ? media.episodes : media.chapters
-  };
-
-  if (supabase) {
-    await supabase.from('media_metadata').upsert(normalized, { onConflict: 'media_id' });
+    const data = await response.json();
+    const media = data?.data?.Media;
+    if (media) {
+      return {
+        media_id: media.id,
+        canonical_title: media.title.english || media.title.romaji || media.title.native,
+        cover_image_url: media.coverImage?.large,
+        media_type: mediaType,
+        total_episodes_chapters: mediaType === 'ANIME' ? media.episodes : media.chapters
+      };
+    }
+  } catch(e) {
+    console.error("AniList search failed:", e);
   }
-  
-  return normalized.media_id;
+
+  // --- FALLBACK 1: JIKAN (MyAnimeList) API ---
+  // Better for non-standard slugs like "kimi-shinu-shitai" or "re zero s4"
+  try {
+    const jikanType = mediaType === 'ANIME' ? 'anime' : 'manga';
+    const jRes = await fetch(`https://api.jikan.moe/v4/${jikanType}?q=${encodeURIComponent(title)}&limit=1`);
+    const jData = await jRes.json();
+    if (jData && jData.data && jData.data.length > 0) {
+      const jMedia = jData.data[0];
+      return {
+        media_id: jMedia.mal_id + 80000000, // offset MAL ID by 80 million to avoid AniList collision
+        canonical_title: jMedia.title_english || jMedia.title,
+        cover_image_url: jMedia.images?.jpg?.large_image_url || jMedia.images?.jpg?.image_url,
+        media_type: mediaType,
+        total_episodes_chapters: jikanType === 'anime' ? jMedia.episodes : jMedia.chapters
+      };
+    }
+  } catch(e) {
+    console.error("Jikan API search failed:", e);
+  }
+
+  return null;
 }
 
 function generatePseudoId(title) {
@@ -90,10 +109,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    let media_id = await findAndCacheMedia(raw_title, type);
+    const fetchedMedia = await findAndCacheMedia(raw_title, type);
+    let media_id;
     
-    // FALLBACK: If AniList 404s, generate pseudo ID and cache it anyway
-    if (!media_id) {
+    if (fetchedMedia) {
+       media_id = fetchedMedia.media_id;
+       // Upsert AniList/Jikan metadata to satisfy foreign key
+       const { error: metaErr } = await supabase.from('media_metadata').upsert(fetchedMedia, { onConflict: 'media_id' });
+       if (metaErr) console.error("Media metadata external API upsert error:", metaErr);
+    } else {
+       // FALLBACK: If API 404s, generate pseudo ID and cache it anyway
        media_id = generatePseudoId(raw_title);
        const { error: metaErr } = await supabase.from('media_metadata').upsert({
           media_id,
@@ -102,7 +127,7 @@ export default async function handler(req, res) {
           media_type: type.toUpperCase(),
           total_episodes_chapters: null
        }, { onConflict: 'media_id' });
-       if (metaErr) console.error("Media metadata upsert error:", metaErr);
+       if (metaErr) console.error("Media metadata pseudo ID upsert error:", metaErr);
     }
     
     // Check existing progress
