@@ -53,8 +53,8 @@ function generatePseudoId(title) {
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash; // Convert to 32bit integer
   }
-  // Make it a positive integer safely out of AniList range (e.g. 2,000,000,000 + abs(hash))
-  return 2000000000 + Math.abs(hash);
+  // Safe bounds: 1,000,000,000 to 1,999,999,999 (Fits in PostgreSQL 4-byte integer)
+  return 1000000000 + (Math.abs(hash) % 1000000000);
 }
 
 export default async function handler(req, res) {

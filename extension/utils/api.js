@@ -35,7 +35,7 @@ async function apiFetch(endpoint, options = {}) {
       console.log("[OmniSync API] Response:", response.status, data);
 
       if (!response.ok) {
-        throw new Error(data.error || `API Error ${response.status}`);
+        throw new Error(data.detail ? `${data.error}: ${data.detail}` : (data.error || `API Error ${response.status}`));
       }
       return data;
 
