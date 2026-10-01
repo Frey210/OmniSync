@@ -14,6 +14,7 @@ const ui = {
   authTitle: document.getElementById('auth-title'),
   authSubtitle: document.getElementById('auth-subtitle'),
   authSwitchText: document.getElementById('auth-switch-text'),
+  anilistBtn: document.getElementById('anilist-btn'),
   
   loading: document.getElementById('loading'),
   progressList: document.getElementById('progress-list'),
@@ -46,8 +47,25 @@ function showDashboard(user) {
   ui.authView.classList.add('hidden');
   ui.dashboardView.classList.remove('hidden');
   ui.userInfo.classList.remove('hidden');
-  ui.userEmail.textContent = user.email.split('@')[0]; // neat shorten
+  ui.userEmail.textContent = user.email.split('@')[0];
   loadProgress();
+  checkAniListStatus();
+}
+
+async function checkAniListStatus() {
+  try {
+    const { linked, username } = await getAniListStatus();
+    if (linked) {
+      ui.anilistBtn.textContent = `✅ ${username}`;
+      ui.anilistBtn.classList.add('linked');
+      ui.anilistBtn.title = `Linked to AniList: ${username}`;
+    } else {
+      ui.anilistBtn.textContent = '🔗 AniList';
+      ui.anilistBtn.classList.remove('linked');
+    }
+  } catch (e) {
+    console.log('AniList status check failed (non-critical)');
+  }
 }
 
 async function loadProgress() {
@@ -180,6 +198,14 @@ ui.logoutBtn.addEventListener('click', async () => {
   ui.emailInput.value = '';
   ui.pwdInput.value = '';
   showLogin();
+});
+
+ui.anilistBtn.addEventListener('click', async () => {
+  if (ui.anilistBtn.classList.contains('linked')) return; // already linked
+  const session = await getSession();
+  if (!session?.user?.id) return;
+  const url = `https://api.farlabs.my.id/api/anilist-auth?user_id=${session.user.id}`;
+  chrome.tabs.create({ url });
 });
 
 document.addEventListener('DOMContentLoaded', checkAuth);

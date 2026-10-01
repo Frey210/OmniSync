@@ -71,3 +71,7 @@ async function deleteProgress(id) {
     body: JSON.stringify({ id })
   });
 }
+
+async function getAniListStatus() {
+  return await apiFetch('/anilist-status', { method: 'GET' });
+}

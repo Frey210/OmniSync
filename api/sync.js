@@ -183,10 +183,54 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to update progress', detail: dbError.message });
     }
 
+    // --- Push to AniList (non-blocking) ---
+    let anilistSync = null;
+    if (media_id < 80000000) { // Real AniList ID, not Jikan offset or pseudo
+      try {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('anilist_token')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (profile?.anilist_token) {
+          const mutation = `
+            mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
+              SaveMediaListEntry(mediaId: $mediaId, progress: $progress, status: $status) {
+                id mediaId progress status
+              }
+            }
+          `;
+          const alRes = await fetch('https://graphql.anilist.co', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${profile.anilist_token}`
+            },
+            body: JSON.stringify({
+              query: mutation,
+              variables: { mediaId: media_id, progress: progressValue, status: 'CURRENT' }
+            })
+          });
+          const alData = await alRes.json();
+          if (alData.errors) {
+            console.error("AniList sync error:", alData.errors);
+            anilistSync = 'error';
+          } else {
+            anilistSync = 'ok';
+          }
+        }
+      } catch (alErr) {
+        console.error("AniList push failed:", alErr);
+        anilistSync = 'error';
+      }
+    }
+
     return res.status(200).json({
        success: true,
        media_id,
-       latest_chapter_episode: progressValue
+       latest_chapter_episode: progressValue,
+       anilist_sync: anilistSync
     });
 
   } catch (err) {
