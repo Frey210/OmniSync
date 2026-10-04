@@ -9,7 +9,7 @@ body { width: 380px; height: 550px; margin: 0; background: linear-gradient(135de
 .logo-icon { width: 24px; height: 24px; background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); border-radius: 8px; box-shadow: 0 0 15px rgba(99, 102, 241, 0.5); }
 h2 { margin: 0; background: linear-gradient(to right, #fff, #94a3b8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; font-size: 18px; letter-spacing: 0.5px; }
 
-#user-info { display: flex; align-items: center; gap: 12px; font-size: 12px; color: #94a3b8; }
+#user-info { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94a3b8; flex-shrink: 0; }
 .sm-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #cbd5e1; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
 .sm-btn:hover { background: rgba(255,255,255,0.1); color: white; }
 

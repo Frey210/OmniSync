@@ -111,6 +111,36 @@ export const PATTERNS = {
        const title = epMatch[1].replace(/-/g, ' ');
        return { raw_title: title, progress: parseFloat(epMatch[2]) };
     }
+  },
+
+  // ============================
+  // ADULT / HENTAI SITES
+  // ============================
+  "hstream.moe": {
+    type: "anime",
+    // Example: /hentai/ane-wa-yanmama-junyuu-chuu-1
+    extract: (url, doc) => {
+      const parts = url.pathname.split('/').filter(Boolean);
+      // last segment is title-slug ending in -episode_number
+      const slug = parts[parts.length - 1];
+      const epMatch = slug.match(/^(.+?)-(\d+)$/);
+      if (!epMatch) return null;
+      const title = epMatch[1].replace(/-/g, ' ');
+      return { raw_title: title, progress: parseFloat(epMatch[2]) };
+    }
+  },
+  "hanime.tv": {
+    type: "anime",
+    // Example: /videos/hentai/ane-wa-yanmama-junyuu-chuu-1
+    extract: (url, doc) => {
+      const parts = url.pathname.split('/').filter(Boolean);
+      // path: videos/hentai/<slug-N>
+      const slug = parts[parts.length - 1];
+      const epMatch = slug.match(/^(.+?)-(\d+)$/);
+      if (!epMatch) return null;
+      const title = epMatch[1].replace(/-/g, ' ');
+      return { raw_title: title, progress: parseFloat(epMatch[2]) };
+    }
   }
 };
 
