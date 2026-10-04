@@ -84,6 +84,26 @@ const ANIME_PATTERNS = {
        const title = epMatch[1].replace(/-/g, ' ');
        return { raw_title: title, progress: parseFloat(epMatch[2]) };
     }
+  },
+  "hstream.moe": {
+    // URL: /hentai/title-slug-1
+    extract: (url, doc) => {
+      const parts = url.pathname.split('/').filter(Boolean);
+      const slug = parts[parts.length - 1];
+      const epMatch = slug.match(/^(.+?)-(\d+)$/);
+      if (!epMatch) return null;
+      return { raw_title: epMatch[1].replace(/-/g, ' '), progress: parseFloat(epMatch[2]) };
+    }
+  },
+  "hanime.tv": {
+    // URL: /videos/hentai/title-slug-1
+    extract: (url, doc) => {
+      const parts = url.pathname.split('/').filter(Boolean);
+      const slug = parts[parts.length - 1];
+      const epMatch = slug.match(/^(.+?)-(\d+)$/);
+      if (!epMatch) return null;
+      return { raw_title: epMatch[1].replace(/-/g, ' '), progress: parseFloat(epMatch[2]) };
+    }
   }
 };
 
