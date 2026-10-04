@@ -132,7 +132,7 @@ function renderList() {
 
     // Fallback cover (CSP-safe, no inline onerror)
     const img = li.querySelector('.cover');
-    img.addEventListener('error', () => { img.src = '../icons/icon48.png'; });
+    img.addEventListener('error', () => { img.style.display = 'none'; });
 
     // Add delete functionality
     li.querySelector('.delete-btn').addEventListener('click', async (e) => {
