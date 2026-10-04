@@ -117,7 +117,7 @@ function renderList() {
     const li = document.createElement('li');
     li.className = 'progress-item';
     li.innerHTML = `
-      <img src="${meta.cover_image_url || ''}" class="cover" alt="Cover" onerror="this.src='../icons/icon48.png'">
+      <img src="${meta.cover_image_url || ''}" class="cover" alt="Cover">
       <div class="item-details">
         <h4 class="item-title" title="${meta.canonical_title}">${meta.canonical_title}</h4>
         <p class="item-meta">
@@ -129,7 +129,11 @@ function renderList() {
       <button class="delete-btn" data-id="${item.id}" title="Delete">&times;</button>
       ${item.source_url ? `<a href="${item.source_url}" class="resume-btn" target="_blank">Resume →</a>` : ''}
     `;
-    
+
+    // Fallback cover (CSP-safe, no inline onerror)
+    const img = li.querySelector('.cover');
+    img.addEventListener('error', () => { img.src = '../icons/icon48.png'; });
+
     // Add delete functionality
     li.querySelector('.delete-btn').addEventListener('click', async (e) => {
         e.stopPropagation();
