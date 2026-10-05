@@ -15,7 +15,8 @@ const ui = {
   authSubtitle: document.getElementById('auth-subtitle'),
   authSwitchText: document.getElementById('auth-switch-text'),
   anilistBtn: document.getElementById('anilist-btn'),
-  
+  anilistLoginBtn: document.getElementById('anilist-login-btn'),
+
   loading: document.getElementById('loading'),
   progressList: document.getElementById('progress-list'),
   emptyState: document.getElementById('empty-state'),
@@ -187,14 +188,51 @@ ui.authSubmitBtn.addEventListener('click', async () => {
   ui.authError.classList.add('hidden');
 
   try {
-    const user = isSignUp ? await signUp(email, pwd) : await signIn(email, pwd);
-    showDashboard(user);
+    if (isSignUp) {
+      await signUp(email, pwd);
+      // After signup Supabase may require email confirm — checkAuth handles both cases
+      await checkAuth();
+    } else {
+      const user = await signIn(email, pwd);
+      showDashboard(user);
+    }
   } catch (err) {
     ui.authError.textContent = err.message;
     ui.authError.classList.remove('hidden');
   } finally {
     ui.authSubmitBtn.textContent = isSignUp ? "Sign Up" : "Sign In";
   }
+});
+
+ui.anilistLoginBtn.addEventListener('click', () => {
+  const url = 'https://api.farlabs.my.id/api/anilist-auth?mode=login';
+  ui.anilistLoginBtn.disabled = true;
+  ui.anilistLoginBtn.textContent = 'Waiting for AniList...';
+
+  chrome.tabs.create({ url }, (tab) => {
+    // Poll chrome.storage every second — backend writes session via localStorage
+    // But extension can't read other tab's localStorage. Use tab onUpdated + polling storage.
+    // Backend success page stores nothing in extension storage — we poll via background.
+    // Simpler: poll our own getSession() since background.js can receive a message.
+    // Actually: re-open popup will checkAuth. So just poll getSession here.
+    const poll = setInterval(async () => {
+      const session = await getSession();
+      if (session?.user) {
+        clearInterval(poll);
+        chrome.tabs.remove(tab.id).catch(() => {});
+        ui.anilistLoginBtn.disabled = false;
+        ui.anilistLoginBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="margin-right:6px;flex-shrink:0"><path d="M6.361 3L2 21h3.86l.807-3h5.86l.807 3H17l.5-1.865L19.5 21H22l-4.5-18H13l-2.5 10L8 3H6.361zM7.5 15l1.5-6 1.5 6H7.5z" fill="currentColor"/></svg>Continue with AniList';
+        showDashboard(session.user);
+      }
+    }, 1500);
+
+    // Stop polling after 5 min
+    setTimeout(() => {
+      clearInterval(poll);
+      ui.anilistLoginBtn.disabled = false;
+      ui.anilistLoginBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="margin-right:6px;flex-shrink:0"><path d="M6.361 3L2 21h3.86l.807-3h5.86l.807 3H17l.5-1.865L19.5 21H22l-4.5-18H13l-2.5 10L8 3H6.361zM7.5 15l1.5-6 1.5 6H7.5z" fill="currentColor"/></svg>Continue with AniList';
+    }, 300000);
+  });
 });
 
 ui.logoutBtn.addEventListener('click', async () => {

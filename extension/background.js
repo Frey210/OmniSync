@@ -6,16 +6,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "TRACK") {
     console.log("Received track request:", request);
     
-    // Convert to sync payload
     const payload = {
        raw_title: request.raw_title,
        type: request.type,
        source_url: request.source_url,
-       // Dynamic key based on type 
        [request.type === 'anime' ? 'episode' : 'chapter']: request.progress
     };
 
-    // Execute sync asynchronously, return true to indicate async response
     syncProgress(payload)
       .then(res => {
          console.log("Sync success:", res);
@@ -23,7 +20,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       })
       .catch(err => {
          console.error("Sync failed:", err);
-         // If unauthorized, maybe prompt user or show badge
          if (err.message.includes('Not authenticated')) {
             chrome.action.setBadgeText({ text: '!' });
             chrome.action.setBadgeBackgroundColor({ color: '#ff0000' });
@@ -31,7 +27,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
          sendResponse({ success: false, error: err.message });
       });
       
-    // Return true to keep message channel open for async response
     return true; 
+  }
+
+  if (request.action === 'SAVE_SESSION') {
+    const s = request.session;
+    const toSave = {
+      access_token: s.access_token,
+      refresh_token: s.refresh_token,
+      user: s.user,
+      expires_at: Math.floor(Date.now() / 1000) + (s.expires_in || 3600)
+    };
+    chrome.storage.local.set({ supabase_session: toSave }, () => {
+      console.log('[OmniSync] AniList session saved.');
+      sendResponse({ ok: true });
+    });
+    return true;
   }
 });

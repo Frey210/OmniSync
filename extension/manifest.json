@@ -49,6 +49,11 @@
       ],
       "js": ["content/anime-tracker.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://api.farlabs.my.id/api/anilist-callback*"],
+      "js": ["content/auth-callback.js"],
+      "run_at": "document_idle"
     }
   ],
   "action": {
