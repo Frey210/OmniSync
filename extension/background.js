@@ -9,43 +9,44 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     tab.url &&
     tab.url.includes('api.farlabs.my.id/api/anilist-callback')
   ) {
-    // Give the page script 800ms to run and set localStorage
+    // Give the page script 500ms to run and set localStorage
     setTimeout(() => {
-      chrome.scripting.executeScript({
-        target: { tabId },
-        func: () => {
-          const raw = localStorage.getItem('omnisync_pending_session');
-          if (raw) localStorage.removeItem('omnisync_pending_session');
-          return raw;
-        }
-      }, (results) => {
-        if (chrome.runtime.lastError) {
-          console.error('[OmniSync] executeScript error:', chrome.runtime.lastError.message);
-          return;
-        }
-        const raw = results?.[0]?.result;
-        if (!raw) {
-          console.log('[OmniSync] No pending session found in page localStorage');
-          return;
-        }
-        try {
-          const s = JSON.parse(raw);
-          const toSave = {
-            access_token: s.access_token,
-            refresh_token: s.refresh_token,
-            user: s.user,
-            expires_at: Math.floor(Date.now() / 1000) + (s.expires_in || 3600)
-          };
-          chrome.storage.local.set({ supabase_session: toSave }, () => {
-            console.log('[OmniSync] AniList session saved from callback page!');
-            // Close the callback tab
-            chrome.tabs.remove(tabId).catch(() => {});
-          });
-        } catch (e) {
-          console.error('[OmniSync] Failed to parse session:', e);
-        }
+      chrome.tabs.get(tabId, (existingTab) => {
+        if (chrome.runtime.lastError || !existingTab) return; // Tab already closed
+
+        chrome.scripting.executeScript({
+          target: { tabId },
+          func: () => {
+            const raw = localStorage.getItem('omnisync_pending_session');
+            if (raw) localStorage.removeItem('omnisync_pending_session');
+            return raw;
+          }
+        }, (results) => {
+          if (chrome.runtime.lastError) {
+            // Benign error if closed in the interim
+            return;
+          }
+          const raw = results?.[0]?.result;
+          if (!raw) return;
+
+          try {
+            const s = JSON.parse(raw);
+            const toSave = {
+              access_token: s.access_token,
+              refresh_token: s.refresh_token,
+              user: s.user,
+              expires_at: Math.floor(Date.now() / 1000) + (s.expires_in || 3600)
+            };
+            chrome.storage.local.set({ supabase_session: toSave }, () => {
+              console.log('[OmniSync] AniList session saved from callback page!');
+              chrome.tabs.remove(tabId).catch(() => {});
+            });
+          } catch (e) {
+            console.error('[OmniSync] Failed to parse session:', e);
+          }
+        });
       });
-    }, 800);
+    }, 500);
   }
 });
 
