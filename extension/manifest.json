@@ -3,7 +3,7 @@
   "name": "OmniSync",
   "version": "1.0",
   "description": "Cross-Platform Anime & Manga Tracker",
-  "permissions": ["storage", "tabs", "alarms"],
+  "permissions": ["storage", "tabs", "alarms", "scripting"],
   "host_permissions": [
     "*://komiku.id/*",
     "*://11.shinigami.asia/*",
