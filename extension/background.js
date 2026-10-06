@@ -39,6 +39,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             };
             chrome.storage.local.set({ supabase_session: toSave }, () => {
               console.log('[OmniSync] AniList session saved from callback page!');
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'icons/icon48.png',
+                title: '🎉 OmniSync — Logged In',
+                message: `Welcome! Your AniList account is now connected.`,
+                silent: false
+              });
               chrome.tabs.remove(tabId).catch(() => {});
             });
           } catch (e) {
@@ -64,6 +71,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     syncProgress(payload)
       .then(res => {
          console.log("Sync success:", res);
+         // Show browser notification on success
+         const d = res?.data;
+         const title = d?.canonical_title || payload.raw_title;
+         const progress = payload.type === 'anime'
+           ? `Episode ${payload.episode}`
+           : `Chapter ${payload.chapter}`;
+         chrome.notifications.create({
+           type: 'basic',
+           iconUrl: 'icons/icon48.png',
+           title: '✅ OmniSync Synced',
+           message: `${title} — ${progress} saved.`,
+           silent: true
+         });
          sendResponse({ success: true, data: res });
       })
       .catch(err => {

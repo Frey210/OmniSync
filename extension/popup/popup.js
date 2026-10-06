@@ -22,7 +22,11 @@ const ui = {
   emptyState: document.getElementById('empty-state'),
   
   searchInput: document.getElementById('search-input'),
-  filterBtns: document.querySelectorAll('.filter-btn')
+  filterBtns: document.querySelectorAll('.filter-btn'),
+
+  statAnime: document.getElementById('stat-anime'),
+  statManga: document.getElementById('stat-manga'),
+  statEps: document.getElementById('stat-eps')
 };
 
 let isSignUp = false;
@@ -87,6 +91,29 @@ async function loadProgress() {
   }
 }
 
+function animateCount(el, target) {
+  const duration = 500;
+  const start = parseInt(el.textContent) || 0;
+  const step = (timestamp) => {
+    if (!step.startTime) step.startTime = timestamp;
+    const progress = Math.min((timestamp - step.startTime) / duration, 1);
+    el.textContent = Math.round(start + (target - start) * progress);
+    if (progress < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function updateStats() {
+  const animeCount = globalDataSet.filter(i => i.media_type === 'ANIME').length;
+  const mangaCount = globalDataSet.filter(i => i.media_type === 'MANGA').length;
+  const totalEps = globalDataSet
+    .filter(i => i.media_type === 'ANIME')
+    .reduce((sum, i) => sum + (i.latest_chapter_episode || 0), 0);
+  animateCount(ui.statAnime, animeCount);
+  animateCount(ui.statManga, mangaCount);
+  animateCount(ui.statEps, totalEps);
+}
+
 function renderList() {
   const searchTerm = ui.searchInput.value.toLowerCase();
   const activeTab = document.querySelector('.filter-btn.active').dataset.filter;
@@ -107,6 +134,7 @@ function renderList() {
   }
   
   ui.emptyState.classList.add('hidden');
+  updateStats();
 
   list.forEach(item => {
     const meta = item.media_metadata;

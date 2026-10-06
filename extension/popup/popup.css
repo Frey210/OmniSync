@@ -78,3 +78,10 @@ h2 { margin: 0; background: linear-gradient(to right, #fff, #94a3b8); -webkit-ba
 
 .empty-state-box { text-align: center; margin-top: 50px; color: #64748b; }
 .empty-icon { font-size: 40px; margin-bottom: 10px; opacity: 0.5; }
+
+/* Stats Bar */
+#stats-bar { display: flex; align-items: center; justify-content: space-around; padding: 10px 20px; background: rgba(99,102,241,0.05); border-bottom: 1px solid rgba(255,255,255,0.04); flex-shrink: 0; }
+.stat-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.stat-number { font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #818cf8, #a78bfa); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; }
+.stat-label { font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-divider { width: 1px; height: 28px; background: rgba(255,255,255,0.06); }
