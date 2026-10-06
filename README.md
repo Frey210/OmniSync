@@ -250,10 +250,10 @@ OmniSync/
 - [x] Cloud sync via Supabase
 - [x] AniList OAuth login & account linking
 - [x] Auto-push progress to AniList
+- [x] Browser notification on sync success
+- [x] Statistics dashboard (watch time, streak)
 - [ ] Firefox support
 - [ ] MyAnimeList integration
-- [ ] Browser notification on sync success
-- [ ] Statistics dashboard (watch time, streak)
 
 ---
 
