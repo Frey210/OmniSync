@@ -20,22 +20,29 @@ export default async function handler(req, res) {
   const verifier = parts[parts.length - 1];
   const user_id = mode === 'link' ? parts[1] : null;
 
-  const clientId = process.env.MAL_CLIENT_ID;
-  const clientSecret = process.env.MAL_CLIENT_SECRET;
+  const clientId = process.env.MAL_CLIENT_ID?.trim();
+  const clientSecret = process.env.MAL_CLIENT_SECRET?.trim();
   const redirectUri = process.env.MAL_REDIRECT_URI || 'https://api.farlabs.my.id/api/mal-callback';
+
+  // Build params — for MAL PKCE, client_secret is NOT sent unless set
+  const params = {
+    client_id: clientId,
+    grant_type: 'authorization_code',
+    code: code.trim(),
+    redirect_uri: redirectUri,
+    code_verifier: verifier.trim()
+  };
+  if (clientSecret) {
+    params.client_secret = clientSecret;
+  }
 
   // Exchange code for tokens
   const tokenRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret || '',
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: redirectUri,
-      code_verifier: verifier
-    })
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams(params)
   });
 
   if (!tokenRes.ok) {
