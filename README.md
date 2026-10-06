@@ -252,8 +252,8 @@ OmniSync/
 - [x] Auto-push progress to AniList
 - [x] Browser notification on sync success
 - [x] Statistics dashboard (watch time, streak)
-- [ ] Firefox support
-- [ ] MyAnimeList integration
+- [x] Firefox support (MV2 manifest + webextension-polyfill)
+- [x] MyAnimeList integration (OAuth PKCE + auto-push progress)
 
 ---
 

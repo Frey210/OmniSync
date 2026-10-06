@@ -52,6 +52,7 @@ async function findAndCacheMedia(title, type) {
       const jMedia = jData.data[0];
       return {
         media_id: jMedia.mal_id + 80000000, // offset MAL ID by 80 million to avoid AniList collision
+        mal_id: jMedia.mal_id,
         canonical_title: jMedia.title_english || jMedia.title,
         cover_image_url: jMedia.images?.jpg?.large_image_url || jMedia.images?.jpg?.image_url,
         media_type: mediaType,
@@ -189,7 +190,7 @@ export default async function handler(req, res) {
       try {
         const { data: profile } = await supabase
           .from('user_profiles')
-          .select('anilist_token')
+          .select('anilist_token, mal_token')
           .eq('user_id', user.id)
           .maybeSingle();
 
@@ -213,11 +214,36 @@ export default async function handler(req, res) {
             })
           });
           const alData = await alRes.json();
-          if (alData.errors) {
-            console.error("AniList sync error:", alData.errors);
-            anilistSync = 'error';
-          } else {
-            anilistSync = 'ok';
+          anilistSync = alData.errors ? 'error' : 'ok';
+        }
+
+        // --- Push to MyAnimeList (non-blocking) ---
+        if (profile?.mal_token) {
+          try {
+            const malType = type.toLowerCase() === 'anime' ? 'anime' : 'manga';
+            // MAL needs MAL ID (from Jikan fallback or search) — use mal_id stored in media_metadata if available
+            const { data: meta } = await supabase
+              .from('media_metadata')
+              .select('mal_id')
+              .eq('media_id', media_id)
+              .maybeSingle();
+
+            if (meta?.mal_id) {
+              const malField = malType === 'anime' ? 'num_watched_episodes' : 'num_chapters_read';
+              await fetch(`https://api.myanimelist.net/v2/${malType}list/${meta.mal_id}`, {
+                method: 'PATCH',
+                headers: {
+                  'Authorization': `Bearer ${profile.mal_token}`,
+                  'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                  status: 'watching',
+                  [malField]: String(progressValue)
+                })
+              });
+            }
+          } catch (malErr) {
+            console.error('MAL push failed:', malErr);
           }
         }
       } catch (alErr) {

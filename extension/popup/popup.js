@@ -16,6 +16,7 @@ const ui = {
   authSwitchText: document.getElementById('auth-switch-text'),
   anilistBtn: document.getElementById('anilist-btn'),
   anilistLoginBtn: document.getElementById('anilist-login-btn'),
+  malBtn: document.getElementById('mal-btn'),
 
   loading: document.getElementById('loading'),
   progressList: document.getElementById('progress-list'),
@@ -55,6 +56,7 @@ function showDashboard(user) {
   ui.userEmail.textContent = user.email.split('@')[0];
   loadProgress();
   checkAniListStatus();
+  checkMalStatus();
 }
 
 async function checkAniListStatus() {
@@ -70,6 +72,22 @@ async function checkAniListStatus() {
     }
   } catch (e) {
     console.log('AniList status check failed (non-critical)');
+  }
+}
+
+async function checkMalStatus() {
+  try {
+    const { linked, username } = await getMalStatus();
+    if (linked) {
+      ui.malBtn.textContent = `✅ ${username}`;
+      ui.malBtn.classList.add('linked');
+      ui.malBtn.title = `Linked to MAL: ${username}`;
+    } else {
+      ui.malBtn.textContent = '🔗 MAL';
+      ui.malBtn.classList.remove('linked');
+    }
+  } catch (e) {
+    console.log('MAL status check failed (non-critical)');
   }
 }
 
@@ -254,6 +272,14 @@ ui.anilistBtn.addEventListener('click', async () => {
   const session = await getSession();
   if (!session?.user?.id) return;
   const url = `https://api.farlabs.my.id/api/anilist-auth?user_id=${session.user.id}`;
+  chrome.tabs.create({ url });
+});
+
+ui.malBtn.addEventListener('click', async () => {
+  if (ui.malBtn.classList.contains('linked')) return; // already linked
+  const session = await getSession();
+  if (!session?.user?.id) return;
+  const url = `https://api.farlabs.my.id/api/mal-auth?user_id=${session.user.id}`;
   chrome.tabs.create({ url });
 });
 
