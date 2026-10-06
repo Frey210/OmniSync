@@ -61,6 +61,16 @@ function processMangaPage() {
   if (data && data.raw_title && data.progress) {
     console.log("[OmniSync] Found Manga Chapter:", data);
     
+    // Smart Reminder: Check if re-reading or skipped chapters
+    chrome.runtime.sendMessage({
+      action: "CHECK_PROGRESS",
+      raw_title: data.raw_title,
+      progress: data.progress,
+      type: "manga"
+    }, () => {
+      if (chrome.runtime.lastError) {}
+    });
+
     // Send to background worker
     chrome.runtime.sendMessage({
       action: "TRACK",

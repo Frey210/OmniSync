@@ -157,8 +157,19 @@ function processAnimePage() {
   console.log("[OmniSync] Extracted anime data:", data);
   
   if (data && data.raw_title && data.progress) {
-    console.log("[OmniSync] Found Anime Episode. Looking for video player...", data);
+    console.log("[OmniSync] Found Anime Episode. Checking watch history...", data);
     
+    // Smart Reminder: Check if rewatching or skipped episodes
+    chrome.runtime.sendMessage({
+      action: "CHECK_PROGRESS",
+      raw_title: data.raw_title,
+      progress: data.progress,
+      type: "anime"
+    }, () => {
+      // Suppress runtime.lastError if background worker not active
+      if (chrome.runtime.lastError) {}
+    });
+
     let attempts = 0;
     const observeVideo = setInterval(() => {
         attempts++;

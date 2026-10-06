@@ -79,3 +79,11 @@ async function getAniListStatus() {
 async function getMalStatus() {
   return await apiFetch('/mal-status', { method: 'GET' });
 }
+
+async function checkProgress(payload) {
+  return await apiFetch('/check', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+

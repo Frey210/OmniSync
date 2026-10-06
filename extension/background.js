@@ -71,24 +71,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     syncProgress(payload)
       .then(res => {
          console.log("Sync success:", res);
-         // Show browser notification on success
-         const d = res?.data;
-         const title = d?.canonical_title || payload.raw_title;
-         const progress = payload.type === 'anime'
+         const progressText = payload.type === 'anime'
            ? `Episode ${payload.episode}`
            : `Chapter ${payload.chapter}`;
+
+         // Notice whether this was an update or already up to date
+         const isAlreadyDone = res.message === 'Progress already up to date';
+         const title = payload.raw_title.charAt(0).toUpperCase() + payload.raw_title.slice(1);
+
          chrome.notifications.create({
            type: 'basic',
            iconUrl: 'icons/icon48.png',
-           title: '✅ OmniSync Synced',
-           message: `${title} — ${progress} saved.`,
-           silent: true
+           title: isAlreadyDone ? 'ℹ️ OmniSync — Sudah Tercatat' : '🎉 OmniSync — Berhasil Disinkronkan!',
+           message: isAlreadyDone 
+             ? `${title} (${progressText}) sudah ada di riwayat tontonanmu.` 
+             : `${title} (${progressText}) berhasil disimpan ke cloud, AniList & MAL!`,
+           priority: 2,
+           silent: false
          });
          sendResponse({ success: true, data: res });
       })
       .catch(err => {
          console.error("Sync failed:", err);
-         if (err.message.includes('Not authenticated')) {
+         if (err.message && err.message.includes('Not authenticated')) {
             chrome.action.setBadgeText({ text: '!' });
             chrome.action.setBadgeBackgroundColor({ color: '#ff0000' });
          }
@@ -96,6 +101,55 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
       
     return true; 
+  }
+
+  // --- SMART REMINDER: Check progress when opening page ---
+  if (request.action === "CHECK_PROGRESS") {
+    checkProgress({
+      raw_title: request.raw_title,
+      progress: request.progress,
+      type: request.type
+    })
+    .then(res => {
+      if (!res || !res.tracked) {
+        sendResponse({ tracked: false });
+        return;
+      }
+
+      const typeLabel = res.type === 'anime' ? 'Episode' : 'Chapter';
+      const title = res.canonical_title || request.raw_title;
+
+      if (res.is_jump) {
+        // Melompati episode!
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon48.png',
+          title: `⚠️ OmniSync — ${typeLabel} Terlompati!`,
+          message: `Kamu membuka ${typeLabel} ${res.current_progress}, padahal terakhir kamu tonton/baca adalah ${typeLabel} ${res.last_progress}!`,
+          priority: 2,
+          silent: false
+        });
+      } else if (res.is_rewatch) {
+        // Sudah pernah ditonton / rewatch
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon48.png',
+          title: `ℹ️ OmniSync — Pernah Kamu Tonton`,
+          message: `Kamu membuka ${typeLabel} ${res.current_progress}. Catatan terakhirmu sudah sampai ${typeLabel} ${res.last_progress}.`,
+          priority: 1,
+          silent: false
+        });
+      }
+
+      sendResponse({ ok: true, data: res });
+    })
+    .catch(err => {
+      // Non-critical, ignore if unauth or network error
+      console.log("[OmniSync] Check progress silent err:", err.message);
+      sendResponse({ ok: false });
+    });
+
+    return true;
   }
 
   if (request.action === 'SAVE_SESSION') {
