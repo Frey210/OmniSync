@@ -13,10 +13,22 @@
        <h2>OmniSync</h2>
     </div>
     <div id="user-info" class="hidden">
-       <button id="anilist-btn" class="anilist-btn" title="Link AniList">🔗 AniList</button>
-       <button id="mal-btn" class="mal-btn" title="Link MyAnimeList">🔗 MAL</button>
-       <span id="user-email"></span>
-       <button id="logout-btn" class="sm-btn">Logout</button>
+       <div class="sync-integrations">
+         <button id="anilist-btn" class="service-pill" title="Connect AniList">
+           <svg class="service-icon" viewBox="0 0 24 24"><path fill="#02A9FF" d="M6.361 3L2 21h3.86l.807-3h5.86l.807 3H17l.5-1.865L19.5 21H22l-4.5-18H13l-2.5 10L8 3H6.361zM7.5 15l1.5-6 1.5 6H7.5z"/></svg>
+           <span class="service-status-dot"></span>
+         </button>
+         <button id="mal-btn" class="service-pill" title="Connect MyAnimeList">
+           <span class="mal-badge-text">MAL</span>
+           <span class="service-status-dot"></span>
+         </button>
+       </div>
+       <div class="user-pill" title="Signed in">
+         <span id="user-email"></span>
+       </div>
+       <button id="logout-btn" class="icon-btn" title="Sign Out">
+         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+       </button>
     </div>
   </div>
 

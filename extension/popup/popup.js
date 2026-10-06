@@ -63,12 +63,11 @@ async function checkAniListStatus() {
   try {
     const { linked, username } = await getAniListStatus();
     if (linked) {
-      ui.anilistBtn.textContent = `✅ ${username}`;
       ui.anilistBtn.classList.add('linked');
-      ui.anilistBtn.title = `Linked to AniList: ${username}`;
+      ui.anilistBtn.title = `AniList: Connected as ${username}`;
     } else {
-      ui.anilistBtn.textContent = '🔗 AniList';
       ui.anilistBtn.classList.remove('linked');
+      ui.anilistBtn.title = 'AniList: Not connected (click to link)';
     }
   } catch (e) {
     console.log('AniList status check failed (non-critical)');
@@ -79,12 +78,11 @@ async function checkMalStatus() {
   try {
     const { linked, username } = await getMalStatus();
     if (linked) {
-      ui.malBtn.textContent = `✅ ${username}`;
       ui.malBtn.classList.add('linked');
-      ui.malBtn.title = `Linked to MAL: ${username}`;
+      ui.malBtn.title = `MyAnimeList: Connected as ${username}`;
     } else {
-      ui.malBtn.textContent = '🔗 MAL';
       ui.malBtn.classList.remove('linked');
+      ui.malBtn.title = 'MyAnimeList: Not connected (click to link)';
     }
   } catch (e) {
     console.log('MAL status check failed (non-critical)');
