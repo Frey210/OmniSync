@@ -254,6 +254,7 @@ OmniSync/
 - [x] Statistics dashboard (watch time, streak)
 - [x] Firefox support (MV2 manifest + webextension-polyfill)
 - [x] MyAnimeList integration (OAuth PKCE + auto-push progress)
+- [x] AniChart integration (next episode release countdown badge for ongoing anime)
 
 ---
 

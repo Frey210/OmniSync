@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build:firefox": "node -e \"const fs=require('fs'); fs.copyFileSync('extension/manifest.firefox.json','extension/manifest.json'); console.log('Switched to Firefox manifest');\"",
-    "build:chrome": "git checkout extension/manifest.json && console.log('Restored Chrome manifest')"
+    "build:chrome": "git checkout extension/manifest.json && node -e \"console.log('Restored Chrome manifest')\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.8",

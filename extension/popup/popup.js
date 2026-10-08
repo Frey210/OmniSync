@@ -130,6 +130,50 @@ function updateStats() {
   animateCount(ui.statEps, totalEps);
 }
 
+function formatAiringCountdown(airingAt) {
+  if (!airingAt) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const diff = airingAt - now;
+
+  if (diff <= 0) {
+    return { text: 'Airing now / soon', urgent: true };
+  }
+
+  const days = Math.floor(diff / 86400);
+  const hours = Math.floor((diff % 86400) / 3600);
+  const mins = Math.floor((diff % 3600) / 60);
+
+  if (days > 0) {
+    return { text: `${days}d ${hours}h`, urgent: false };
+  } else if (hours > 0) {
+    return { text: `${hours}h ${mins}m`, urgent: hours < 12 };
+  } else {
+    return { text: `${mins}m`, urgent: true };
+  }
+}
+
+function updateAiringTimers() {
+  document.querySelectorAll('.airing-badge[data-airing-at]').forEach(el => {
+    const airingAt = parseInt(el.dataset.airingAt);
+    const ep = el.dataset.ep;
+    const cd = formatAiringCountdown(airingAt);
+    if (cd) {
+      const textEl = el.querySelector('.airing-text');
+      if (textEl) textEl.textContent = `Ep ${ep} in ${cd.text}`;
+      const pulseEl = el.querySelector('.airing-pulse');
+      if (pulseEl) {
+        if (cd.urgent) {
+          pulseEl.classList.add('urgent');
+          el.classList.add('urgent');
+        } else {
+          pulseEl.classList.remove('urgent');
+          el.classList.remove('urgent');
+        }
+      }
+    }
+  });
+}
+
 function renderList() {
   const searchTerm = ui.searchInput.value.toLowerCase();
   const activeTab = document.querySelector('.filter-btn.active').dataset.filter;
@@ -157,19 +201,40 @@ function renderList() {
     const typeLabel = item.media_type === 'ANIME' ? 'EP' : 'CH';
     const badgeClass = item.media_type.toLowerCase();
     
-    // Sort logic is implicitly "Recent" because Vercel returns `order by updated_at DESC`
-    
+    // Airing countdown badge for ongoing anime (AniChart integration)
+    let airingBadgeHtml = '';
+    if (item.media_type === 'ANIME' && meta?.next_airing_at && meta?.next_airing_episode) {
+      const cd = formatAiringCountdown(meta.next_airing_at);
+      if (cd) {
+        const urgentClass = cd.urgent ? ' urgent' : '';
+        airingBadgeHtml = `
+          <a href="https://anichart.net" target="_blank" class="airing-badge${urgentClass}" data-airing-at="${meta.next_airing_at}" data-ep="${meta.next_airing_episode}" title="Jadwal tayang AniChart (Klik untuk buka)">
+            <span class="airing-pulse${urgentClass}"></span>
+            <span class="airing-text">Ep ${meta.next_airing_episode} in ${cd.text}</span>
+          </a>
+        `;
+      }
+    } else if (item.media_type === 'ANIME' && meta?.status === 'RELEASING') {
+      airingBadgeHtml = `
+        <a href="https://anichart.net" target="_blank" class="airing-badge" title="Anime ongoing di AniChart">
+          <span class="airing-pulse"></span>
+          <span class="airing-text">Ongoing</span>
+        </a>
+      `;
+    }
+
     const li = document.createElement('li');
     li.className = 'progress-item';
     li.innerHTML = `
-      <img src="${meta.cover_image_url || ''}" class="cover" alt="Cover">
+      <img src="${meta?.cover_image_url || ''}" class="cover" alt="Cover">
       <div class="item-details">
-        <h4 class="item-title" title="${meta.canonical_title}">${meta.canonical_title}</h4>
+        <h4 class="item-title" title="${meta?.canonical_title || ''}">${meta?.canonical_title || 'Unknown'}</h4>
         <p class="item-meta">
            <span class="badge ${badgeClass}">${item.media_type}</span>
            <span class="progress-text">${typeLabel} ${item.latest_chapter_episode}</span> 
-           ${meta.total_episodes_chapters ? `<span style="opacity:0.5">/ ${meta.total_episodes_chapters}</span>` : ''}
+           ${meta?.total_episodes_chapters ? `<span style="opacity:0.5">/ ${meta.total_episodes_chapters}</span>` : ''}
         </p>
+        ${airingBadgeHtml}
       </div>
       <button class="delete-btn" data-id="${item.id}" title="Delete">&times;</button>
       ${item.source_url ? `<a href="${item.source_url}" class="resume-btn" target="_blank">Resume →</a>` : ''}
@@ -282,3 +347,4 @@ ui.malBtn.addEventListener('click', async () => {
 });
 
 document.addEventListener('DOMContentLoaded', checkAuth);
+setInterval(updateAiringTimers, 60000);

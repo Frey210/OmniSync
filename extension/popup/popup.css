@@ -99,3 +99,13 @@ h2 { margin: 0; background: linear-gradient(to right, #ffffff, #94a3b8); -webkit
 .stat-number { font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #818cf8, #a78bfa); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; }
 .stat-label { font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 .stat-divider { width: 1px; height: 28px; background: rgba(255,255,255,0.06); }
+ 
+/* Airing countdown badge (AniChart) */
+.airing-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 600; color: #38bdf8; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.22); padding: 2px 8px; border-radius: 6px; width: fit-content; text-decoration: none; transition: all 0.2s ease; cursor: pointer; margin-top: 2px; }
+.airing-badge:hover { background: rgba(56, 189, 248, 0.16); border-color: rgba(56, 189, 248, 0.45); box-shadow: 0 0 10px rgba(56, 189, 248, 0.25); color: #7dd3fc; }
+.airing-badge.urgent { color: #fbbf24; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.35); }
+.airing-badge.urgent:hover { background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.55); box-shadow: 0 0 10px rgba(245, 158, 11, 0.25); color: #fde68a; }
+.airing-pulse { width: 5px; height: 5px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 6px #38bdf8; animation: pulse-dot 1.5s infinite; flex-shrink: 0; }
+.airing-pulse.urgent { background: #f59e0b; box-shadow: 0 0 7px #f59e0b; animation: pulse-urgent 0.8s infinite; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.75); } }
+@keyframes pulse-urgent { 0%, 100% { opacity: 1; transform: scale(1.1); } 50% { opacity: 0.4; transform: scale(0.7); } }

@@ -16,6 +16,11 @@ async function findAndCacheMedia(title, type) {
         coverImage { large }
         episodes
         chapters
+        status
+        nextAiringEpisode {
+          airingAt
+          episode
+        }
       }
     }
   `;
@@ -35,7 +40,10 @@ async function findAndCacheMedia(title, type) {
         canonical_title: media.title.english || media.title.romaji || media.title.native,
         cover_image_url: media.coverImage?.large,
         media_type: mediaType,
-        total_episodes_chapters: mediaType === 'ANIME' ? media.episodes : media.chapters
+        total_episodes_chapters: mediaType === 'ANIME' ? media.episodes : media.chapters,
+        status: media.status || null,
+        next_airing_episode: media.nextAiringEpisode?.episode || null,
+        next_airing_at: media.nextAiringEpisode?.airingAt || null
       };
     }
   } catch(e) {
@@ -50,13 +58,17 @@ async function findAndCacheMedia(title, type) {
     const jData = await jRes.json();
     if (jData && jData.data && jData.data.length > 0) {
       const jMedia = jData.data[0];
+      const jStatus = jMedia.status ? (jMedia.status.includes('Currently Airing') ? 'RELEASING' : (jMedia.status.includes('Finished') ? 'FINISHED' : null)) : null;
       return {
         media_id: jMedia.mal_id + 80000000, // offset MAL ID by 80 million to avoid AniList collision
         mal_id: jMedia.mal_id,
         canonical_title: jMedia.title_english || jMedia.title,
         cover_image_url: jMedia.images?.jpg?.large_image_url || jMedia.images?.jpg?.image_url,
         media_type: mediaType,
-        total_episodes_chapters: jikanType === 'anime' ? jMedia.episodes : jMedia.chapters
+        total_episodes_chapters: jikanType === 'anime' ? jMedia.episodes : jMedia.chapters,
+        status: jStatus,
+        next_airing_episode: null,
+        next_airing_at: null
       };
     }
   } catch(e) {

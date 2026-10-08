@@ -2,13 +2,17 @@
 
 async function test() {
   const query = `
-    query ($search: String, $type: MediaType) {
-      Media(search: $search, type: $type) {
-        id
-        title { romaji english native }
-        coverImage { large }
-        episodes
-        chapters
+    query ($ids: [Int]) {
+      Page {
+        media(id_in: $ids, type: ANIME) {
+          id
+          status
+          nextAiringEpisode {
+            airingAt
+            timeUntilAiring
+            episode
+          }
+        }
       }
     }
   `;
@@ -17,7 +21,7 @@ async function test() {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({ query, variables: { search: "everyones darling has a secret", type: "MANGA" } })
+    body: JSON.stringify({ query, variables: { ids: [21, 16498] } })
   });
 
   const data = await response.json();

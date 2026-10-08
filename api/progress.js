@@ -37,6 +37,7 @@ export default async function handler(req, res) {
       .from('user_progress')
       .select(`
         id,
+        media_id,
         latest_chapter_episode,
         media_type,
         source_url,
@@ -53,6 +54,63 @@ export default async function handler(req, res) {
     if (error) {
       console.error(error);
       return res.status(500).json({ error: 'Failed to fetch progress' });
+    }
+
+    // Live AniChart / AniList airing schedule batch fetch for anime
+    const animeIds = (progress || [])
+      .filter(item => item.media_type === 'ANIME' && item.media_id && item.media_id < 80000000)
+      .map(item => item.media_id);
+
+    if (animeIds.length > 0) {
+      try {
+        const alQuery = `
+          query ($ids: [Int]) {
+            Page(page: 1, perPage: 50) {
+              media(id_in: $ids, type: ANIME) {
+                id
+                status
+                nextAiringEpisode {
+                  airingAt
+                  episode
+                }
+              }
+            }
+          }
+        `;
+
+        const alRes = await fetch('https://graphql.anilist.co', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ query: alQuery, variables: { ids: animeIds } })
+        });
+
+        const alData = await alRes.json();
+        const mediaList = alData?.data?.Page?.media || [];
+
+        if (mediaList.length > 0) {
+          const scheduleMap = new Map();
+          for (const m of mediaList) {
+            scheduleMap.set(m.id, {
+              status: m.status,
+              next_airing_episode: m.nextAiringEpisode?.episode || null,
+              next_airing_at: m.nextAiringEpisode?.airingAt || null
+            });
+          }
+
+          for (const item of progress) {
+            if (scheduleMap.has(item.media_id)) {
+              const fresh = scheduleMap.get(item.media_id);
+              if (item.media_metadata) {
+                item.media_metadata.status = fresh.status;
+                item.media_metadata.next_airing_episode = fresh.next_airing_episode;
+                item.media_metadata.next_airing_at = fresh.next_airing_at;
+              }
+            }
+          }
+        }
+      } catch (alErr) {
+        console.warn("AniList airing schedule fetch warning:", alErr.message);
+      }
     }
 
     return res.status(200).json({ data: progress });
