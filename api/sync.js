@@ -12,6 +12,7 @@ async function findAndCacheMedia(title, type) {
     query ($search: String, $type: MediaType) {
       Media(search: $search, type: $type) {
         id
+        idMal
         title { romaji english native }
         coverImage { large }
         episodes
@@ -37,6 +38,7 @@ async function findAndCacheMedia(title, type) {
     if (media) {
       return {
         media_id: media.id,
+        mal_id: media.idMal || null,
         canonical_title: media.title.english || media.title.romaji || media.title.native,
         cover_image_url: media.coverImage?.large,
         media_type: mediaType,
@@ -196,79 +198,186 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to update progress', detail: dbError.message });
     }
 
-    // --- Push to AniList (non-blocking) ---
-    let anilistSync = null;
-    if (media_id < 80000000) { // Real AniList ID, not Jikan offset or pseudo
+// Push progress to AniList
+async function pushToAniList(userId, mediaId, progressValue) {
+  if (mediaId >= 80000000) return null; // Pseudo ID or Jikan offset
+  try {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('anilist_token')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!profile?.anilist_token) return null;
+
+    const mutation = `
+      mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
+        SaveMediaListEntry(mediaId: $mediaId, progress: $progress, status: $status) {
+          id mediaId progress status
+        }
+      }
+    `;
+    const alRes = await fetch('https://graphql.anilist.co', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${profile.anilist_token}`
+      },
+      body: JSON.stringify({
+        query: mutation,
+        variables: { mediaId: mediaId, progress: progressValue, status: 'CURRENT' }
+      })
+    });
+    const alData = await alRes.json();
+    return alData.errors ? 'error' : 'ok';
+  } catch (err) {
+    console.error('[OmniSync] AniList push error:', err);
+    return 'error';
+  }
+}
+
+// Push progress to MyAnimeList (supports Anime and Manga)
+async function pushToMyAnimeList(userId, mediaId, rawTitle, type, progressValue) {
+  try {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('mal_token, mal_refresh_token')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!profile?.mal_token) return null; // Not linked
+
+    let malId = null;
+    const { data: meta } = await supabase
+      .from('media_metadata')
+      .select('mal_id')
+      .eq('media_id', mediaId)
+      .maybeSingle();
+
+    malId = meta?.mal_id;
+
+    // Backfill mal_id from AniList if missing
+    if (!malId && mediaId < 80000000) {
       try {
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('anilist_token, mal_token')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (profile?.anilist_token) {
-          const mutation = `
-            mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
-              SaveMediaListEntry(mediaId: $mediaId, progress: $progress, status: $status) {
-                id mediaId progress status
-              }
-            }
-          `;
-          const alRes = await fetch('https://graphql.anilist.co', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${profile.anilist_token}`
-            },
-            body: JSON.stringify({
-              query: mutation,
-              variables: { mediaId: media_id, progress: progressValue, status: 'CURRENT' }
-            })
-          });
-          const alData = await alRes.json();
-          anilistSync = alData.errors ? 'error' : 'ok';
+        const alRes = await fetch('https://graphql.anilist.co', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: `{ Media(id: ${mediaId}) { idMal } }` })
+        });
+        const alData = await alRes.json();
+        malId = alData?.data?.Media?.idMal || null;
+        if (malId) {
+          await supabase.from('media_metadata').update({ mal_id: malId }).eq('media_id', mediaId);
         }
-
-        // --- Push to MyAnimeList (non-blocking) ---
-        if (profile?.mal_token) {
-          try {
-            const malType = type.toLowerCase() === 'anime' ? 'anime' : 'manga';
-            // MAL needs MAL ID (from Jikan fallback or search) — use mal_id stored in media_metadata if available
-            const { data: meta } = await supabase
-              .from('media_metadata')
-              .select('mal_id')
-              .eq('media_id', media_id)
-              .maybeSingle();
-
-            if (meta?.mal_id) {
-              const malField = malType === 'anime' ? 'num_watched_episodes' : 'num_chapters_read';
-              await fetch(`https://api.myanimelist.net/v2/${malType}list/${meta.mal_id}`, {
-                method: 'PATCH',
-                headers: {
-                  'Authorization': `Bearer ${profile.mal_token}`,
-                  'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: new URLSearchParams({
-                  status: 'watching',
-                  [malField]: String(progressValue)
-                })
-              });
-            }
-          } catch (malErr) {
-            console.error('MAL push failed:', malErr);
-          }
-        }
-      } catch (alErr) {
-        console.error("AniList push failed:", alErr);
-        anilistSync = 'error';
+      } catch (e) {
+        console.warn('[OmniSync] Could not backfill mal_id from AniList:', e.message);
       }
     }
+
+    // Backfill mal_id from Jikan if still missing
+    if (!malId && rawTitle) {
+      try {
+        const jikanType = type.toLowerCase() === 'anime' ? 'anime' : 'manga';
+        const jRes = await fetch(`https://api.jikan.moe/v4/${jikanType}?q=${encodeURIComponent(rawTitle)}&limit=1`);
+        const jData = await jRes.json();
+        if (jData?.data?.[0]?.mal_id) {
+          malId = jData.data[0].mal_id;
+          await supabase.from('media_metadata').update({ mal_id: malId }).eq('media_id', mediaId);
+        }
+      } catch (e) {
+        console.warn('[OmniSync] Could not backfill mal_id from Jikan:', e.message);
+      }
+    }
+
+    if (!malId) {
+      console.warn(`[OmniSync] No MAL ID found for media ${mediaId} (${rawTitle})`);
+      return 'no_mal_id';
+    }
+
+    const isAnime = type.toLowerCase() === 'anime';
+    const endpoint = isAnime
+      ? `https://api.myanimelist.net/v2/anime/${malId}/my_list_status`
+      : `https://api.myanimelist.net/v2/manga/${malId}/my_list_status`;
+
+    const fieldName = isAnime ? 'num_watched_episodes' : 'num_chapters_read';
+    const statusVal = isAnime ? 'watching' : 'reading';
+
+    const sendMalUpdate = async (token) => {
+      return await fetch(endpoint, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          status: statusVal,
+          [fieldName]: String(progressValue)
+        })
+      });
+    };
+
+    let malRes = await sendMalUpdate(profile.mal_token);
+
+    // If token expired (401), auto-refresh token and retry
+    if (malRes.status === 401 && profile.mal_refresh_token) {
+      console.log('[OmniSync] MAL token expired, attempting refresh...');
+      const refreshParams = {
+        client_id: process.env.MAL_CLIENT_ID?.trim(),
+        grant_type: 'refresh_token',
+        refresh_token: profile.mal_refresh_token.trim()
+      };
+      if (process.env.MAL_CLIENT_SECRET?.trim()) {
+        refreshParams.client_secret = process.env.MAL_CLIENT_SECRET.trim();
+      }
+
+      const refreshRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(refreshParams)
+      });
+
+      if (refreshRes.ok) {
+        const newTokens = await refreshRes.json();
+        await supabase.from('user_profiles').update({
+          mal_token: newTokens.access_token,
+          mal_refresh_token: newTokens.refresh_token || profile.mal_refresh_token
+        }).eq('user_id', userId);
+
+        malRes = await sendMalUpdate(newTokens.access_token);
+      } else {
+        const refText = await refreshRes.text();
+        console.error('[OmniSync] MAL token refresh failed:', refText);
+        return 'token_expired';
+      }
+    }
+
+    if (!malRes.ok) {
+      const errText = await malRes.text();
+      console.error(`[OmniSync] MAL update failed (${malRes.status}):`, errText);
+      return 'error';
+    }
+
+    console.log(`[OmniSync] MAL progress synced: ${type} ${malId} -> ${progressValue}`);
+    return 'ok';
+
+  } catch (err) {
+    console.error('[OmniSync] MAL push error:', err);
+    return 'error';
+  }
+}
+
+    // --- Push to AniList & MyAnimeList in parallel (non-blocking) ---
+    const [anilistSync, malSync] = await Promise.all([
+      pushToAniList(user.id, media_id, progressValue),
+      pushToMyAnimeList(user.id, media_id, raw_title, type, progressValue)
+    ]);
 
     return res.status(200).json({
        success: true,
        media_id,
        latest_chapter_episode: progressValue,
-       anilist_sync: anilistSync
+       anilist_sync: anilistSync,
+       mal_sync: malSync
     });
 
   } catch (err) {
