@@ -223,16 +223,54 @@ function renderList() {
       `;
     }
 
+    // Cover fallback handler
+    const hasValidCover = meta?.cover_image_url && !meta.cover_image_url.includes('placeholder');
+    const coverHtml = hasValidCover
+      ? `<img src="${meta.cover_image_url}" class="cover" alt="Cover" loading="lazy">`
+      : `<div class="cover cover-placeholder">
+           <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+             ${item.media_type === 'ANIME' 
+               ? '<rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line>' 
+               : '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>'
+             }
+           </svg>
+           <span class="placeholder-label">${item.media_type}</span>
+         </div>`;
+
+    // Construct external source links (AniList & MyAnimeList)
+    const typeLower = (item.media_type || 'anime').toLowerCase();
+    const titleText = meta?.canonical_title || 'Unknown';
+
+    const isRealAlId = item.media_id && item.media_id < 80000000;
+    const alUrl = isRealAlId 
+      ? `https://anilist.co/${typeLower}/${item.media_id}`
+      : `https://anilist.co/search/${typeLower}?search=${encodeURIComponent(titleText)}`;
+
+    const malId = meta?.mal_id || (item.media_id >= 80000000 && item.media_id < 1000000000 ? item.media_id - 80000000 : null);
+    const malUrl = malId
+      ? `https://myanimelist.net/${typeLower}/${malId}`
+      : `https://myanimelist.net/${typeLower}.php?q=${encodeURIComponent(titleText)}`;
+
     const li = document.createElement('li');
     li.className = 'progress-item';
     li.innerHTML = `
-      <img src="${meta?.cover_image_url || ''}" class="cover" alt="Cover">
+      ${coverHtml}
       <div class="item-details">
-        <h4 class="item-title" title="${meta?.canonical_title || ''}">${meta?.canonical_title || 'Unknown'}</h4>
+        <h4 class="item-title" title="${titleText}">${titleText}</h4>
         <p class="item-meta">
            <span class="badge ${badgeClass}">${item.media_type}</span>
            <span class="progress-text">${typeLabel} ${item.latest_chapter_episode}</span> 
-           ${meta?.total_episodes_chapters ? `<span style="opacity:0.5">/ ${meta.total_episodes_chapters}</span>` : ''}
+           ${meta?.total_episodes_chapters ? `<span class="total-count">/ ${meta.total_episodes_chapters}</span>` : ''}
+           <span class="meta-sep">·</span>
+           <span class="source-pills">
+             <a href="${alUrl}" target="_blank" rel="noopener noreferrer" class="source-pill al" title="Lihat di AniList">
+               <svg class="source-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M6.361 3L2 21h3.86l.807-3h5.86l.807 3H17l.5-1.865L19.5 21H22l-4.5-18H13l-2.5 10L8 3H6.361zM7.5 15l1.5-6 1.5 6H7.5z"/></svg>
+               <span>AL</span>
+             </a>
+             <a href="${malUrl}" target="_blank" rel="noopener noreferrer" class="source-pill mal" title="Lihat di MyAnimeList">
+               <span>MAL</span>
+             </a>
+           </span>
         </p>
         ${airingBadgeHtml}
       </div>
@@ -240,9 +278,28 @@ function renderList() {
       ${item.source_url ? `<a href="${item.source_url}" class="resume-btn" target="_blank">Resume →</a>` : ''}
     `;
 
-    // Fallback cover (CSP-safe, no inline onerror)
-    const img = li.querySelector('.cover');
-    img.addEventListener('error', () => { img.style.display = 'none'; });
+    // Dynamic fallback if img fails loading
+    const img = li.querySelector('img.cover');
+    if (img) {
+      img.addEventListener('error', () => {
+        const ph = document.createElement('div');
+        ph.className = 'cover cover-placeholder';
+        ph.innerHTML = `
+          <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            ${item.media_type === 'ANIME' 
+              ? '<rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line>' 
+              : '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>'
+            }
+          </svg>
+          <span class="placeholder-label">${item.media_type}</span>
+        `;
+        img.replaceWith(ph);
+      });
+    }
+
+    li.querySelectorAll('.source-pill').forEach(pill => {
+      pill.addEventListener('click', (e) => e.stopPropagation());
+    });
 
     // Add delete functionality
     li.querySelector('.delete-btn').addEventListener('click', async (e) => {

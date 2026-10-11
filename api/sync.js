@@ -5,76 +5,102 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
-// Helper to find media on AniList
+// Helper to get search variations from title
+function getTitleVariations(title) {
+  const clean = title.replace(/\b(sub\s*indo|subtitle\s*indonesia|season\s*\d+|s\d+|batch)\b/gi, '').trim();
+  const list = [clean];
+  const splitDai = clean.replace(/\bdai([a-z]+)/gi, 'dai $1');
+  if (splitDai !== clean && !list.includes(splitDai)) list.push(splitDai);
+  const noPunct = clean.replace(/[-_:]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (noPunct !== clean && !list.includes(noPunct)) list.push(noPunct);
+  const words = clean.split(/\s+/).filter(w => w.length > 2);
+  if (words.length > 2) {
+    const head = words.slice(0, 3).join(' ');
+    if (!list.includes(head)) list.push(head);
+  }
+  return list;
+}
+
+// Helper to find media on AniList with fallback to Jikan (MAL)
 async function findAndCacheMedia(title, type) {
   const mediaType = type.toUpperCase();
-  const query = `
+  const variations = getTitleVariations(title);
+
+  const alQuery = `
     query ($search: String, $type: MediaType) {
-      Media(search: $search, type: $type) {
-        id
-        idMal
-        title { romaji english native }
-        coverImage { large }
-        episodes
-        chapters
-        status
-        nextAiringEpisode {
-          airingAt
-          episode
+      Page(page: 1, perPage: 1) {
+        media(search: $search, type: $type, sort: SEARCH_MATCH) {
+          id
+          idMal
+          title { romaji english native }
+          coverImage { large medium }
+          episodes
+          chapters
+          status
+          nextAiringEpisode {
+            airingAt
+            episode
+          }
         }
       }
     }
   `;
 
-  try {
-    const response = await fetch('https://graphql.anilist.co', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ query, variables: { search: title, type: mediaType } })
-    });
+  // 1. Try AniList with variations
+  for (const v of variations) {
+    try {
+      const response = await fetch('https://graphql.anilist.co', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ query: alQuery, variables: { search: v, type: mediaType } })
+      });
 
-    const data = await response.json();
-    const media = data?.data?.Media;
-    if (media) {
-      return {
-        media_id: media.id,
-        mal_id: media.idMal || null,
-        canonical_title: media.title.english || media.title.romaji || media.title.native,
-        cover_image_url: media.coverImage?.large,
-        media_type: mediaType,
-        total_episodes_chapters: mediaType === 'ANIME' ? media.episodes : media.chapters,
-        status: media.status || null,
-        next_airing_episode: media.nextAiringEpisode?.episode || null,
-        next_airing_at: media.nextAiringEpisode?.airingAt || null
-      };
+      const data = await response.json();
+      const media = data?.data?.Page?.media?.[0];
+      if (media) {
+        return {
+          media_id: media.id,
+          mal_id: media.idMal || null,
+          canonical_title: media.title.english || media.title.romaji || media.title.native,
+          cover_image_url: media.coverImage?.large || media.coverImage?.medium || null,
+          media_type: mediaType,
+          total_episodes_chapters: mediaType === 'ANIME' ? media.episodes : media.chapters,
+          status: media.status || null,
+          next_airing_episode: media.nextAiringEpisode?.episode || null,
+          next_airing_at: media.nextAiringEpisode?.airingAt || null
+        };
+      }
+    } catch(e) {
+      console.warn("AniList search attempt failed for", v, e.message);
     }
-  } catch(e) {
-    console.error("AniList search failed:", e);
   }
 
-  // --- FALLBACK 1: JIKAN (MyAnimeList) API ---
-  // Better for non-standard slugs like "kimi-shinu-shitai" or "re zero s4"
-  try {
-    const jikanType = mediaType === 'ANIME' ? 'anime' : 'manga';
-    const jRes = await fetch(`https://api.jikan.moe/v4/${jikanType}?q=${encodeURIComponent(title)}&limit=1`);
-    const jData = await jRes.json();
-    if (jData && jData.data && jData.data.length > 0) {
-      const jMedia = jData.data[0];
-      const jStatus = jMedia.status ? (jMedia.status.includes('Currently Airing') ? 'RELEASING' : (jMedia.status.includes('Finished') ? 'FINISHED' : null)) : null;
-      return {
-        media_id: jMedia.mal_id + 80000000, // offset MAL ID by 80 million to avoid AniList collision
-        mal_id: jMedia.mal_id,
-        canonical_title: jMedia.title_english || jMedia.title,
-        cover_image_url: jMedia.images?.jpg?.large_image_url || jMedia.images?.jpg?.image_url,
-        media_type: mediaType,
-        total_episodes_chapters: jikanType === 'anime' ? jMedia.episodes : jMedia.chapters,
-        status: jStatus,
-        next_airing_episode: null,
-        next_airing_at: null
-      };
+  // 2. FALLBACK: JIKAN (MyAnimeList) API
+  for (const v of variations.slice(0, 2)) {
+    try {
+      const jikanType = mediaType === 'ANIME' ? 'anime' : 'manga';
+      const jRes = await fetch(`https://api.jikan.moe/v4/${jikanType}?q=${encodeURIComponent(v)}&limit=1`, {
+        signal: AbortSignal.timeout(4000)
+      });
+      const jData = await jRes.json();
+      if (jData && jData.data && jData.data.length > 0) {
+        const jMedia = jData.data[0];
+        const jStatus = jMedia.status ? (jMedia.status.includes('Currently Airing') ? 'RELEASING' : (jMedia.status.includes('Finished') ? 'FINISHED' : null)) : null;
+        return {
+          media_id: jMedia.mal_id + 80000000, // offset MAL ID by 80 million to avoid AniList collision
+          mal_id: jMedia.mal_id,
+          canonical_title: jMedia.title_english || jMedia.title,
+          cover_image_url: jMedia.images?.jpg?.large_image_url || jMedia.images?.jpg?.image_url || null,
+          media_type: mediaType,
+          total_episodes_chapters: jikanType === 'anime' ? jMedia.episodes : jMedia.chapters,
+          status: jStatus,
+          next_airing_episode: null,
+          next_airing_at: null
+        };
+      }
+    } catch(e) {
+      console.warn("Jikan API search failed for", v, e.message);
     }
-  } catch(e) {
-    console.error("Jikan API search failed:", e);
   }
 
   return null;
@@ -133,12 +159,12 @@ export default async function handler(req, res) {
        const { error: metaErr } = await supabase.from('media_metadata').upsert(fetchedMedia, { onConflict: 'media_id' });
        if (metaErr) console.error("Media metadata external API upsert error:", metaErr);
     } else {
-       // FALLBACK: If API 404s, generate pseudo ID and cache it anyway
+       // FALLBACK: If API 404s, generate pseudo ID and cache without placeholder URL
        media_id = generatePseudoId(raw_title);
        const { error: metaErr } = await supabase.from('media_metadata').upsert({
           media_id,
           canonical_title: (raw_title.charAt(0).toUpperCase() + raw_title.slice(1)),
-          cover_image_url: 'https://via.placeholder.com/150x200.png?text=No+Cover',
+          cover_image_url: null,
           media_type: type.toUpperCase(),
           total_episodes_chapters: null
        }, { onConflict: 'media_id' });

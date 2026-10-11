@@ -45,7 +45,8 @@ export default async function handler(req, res) {
         media_metadata (
           canonical_title,
           cover_image_url,
-          total_episodes_chapters
+          total_episodes_chapters,
+          mal_id
         )
       `)
       .eq('user_id', user.id)
@@ -54,6 +55,118 @@ export default async function handler(req, res) {
     if (error) {
       console.error(error);
       return res.status(500).json({ error: 'Failed to fetch progress' });
+    }
+
+    // Auto-resolve missing or placeholder covers for existing library items
+    const missingCoverItems = (progress || []).filter(item => {
+      const cover = item.media_metadata?.cover_image_url;
+      return !cover || cover.includes('placeholder');
+    });
+
+    if (missingCoverItems.length > 0) {
+      await Promise.all(missingCoverItems.map(async (item) => {
+        const rawTitle = item.media_metadata?.canonical_title;
+        if (!rawTitle) return;
+
+        try {
+          const clean = rawTitle.replace(/\b(sub\s*indo|subtitle\s*indonesia|season\s*\d+|s\d+|batch)\b/gi, '').trim();
+          const variations = [clean];
+          const splitDai = clean.replace(/\bdai([a-z]+)/gi, 'dai $1');
+          if (splitDai !== clean && !variations.includes(splitDai)) variations.push(splitDai);
+          const words = clean.split(/\s+/).filter(w => w.length > 2);
+          if (words.length > 2) {
+            const head = words.slice(0, 3).join(' ');
+            if (!variations.includes(head)) variations.push(head);
+          }
+
+          // 1. Try AniList across variations
+          let resolved = null;
+          for (const v of variations) {
+            try {
+              const alRes = await fetch('https://graphql.anilist.co', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  query: `query ($s: String, $t: MediaType) {
+                    Page(page: 1, perPage: 1) {
+                      media(search: $s, type: $t, sort: SEARCH_MATCH) {
+                        id
+                        idMal
+                        title { romaji english native }
+                        coverImage { large }
+                        status
+                        episodes
+                        chapters
+                        nextAiringEpisode { airingAt episode }
+                      }
+                    }
+                  }`,
+                  variables: { s: v, t: (item.media_type || 'anime').toUpperCase() }
+                })
+              });
+              const alData = await alRes.json();
+              const m = alData?.data?.Page?.media?.[0];
+              if (m?.coverImage?.large) {
+                resolved = {
+                  media_id: m.id,
+                  mal_id: m.idMal || null,
+                  canonical_title: m.title.english || m.title.romaji || rawTitle,
+                  cover_image_url: m.coverImage.large,
+                  status: m.status,
+                  next_airing_episode: m.nextAiringEpisode?.episode || null,
+                  next_airing_at: m.nextAiringEpisode?.airingAt || null
+                };
+                break;
+              }
+            } catch (e) {
+              // continue
+            }
+          }
+
+          // 2. Fallback to Jikan (MAL API) if AniList still has no match
+          if (!resolved) {
+            try {
+              const jType = (item.media_type || 'anime').toLowerCase();
+              const jRes = await fetch(`https://api.jikan.moe/v4/${jType}?q=${encodeURIComponent(clean)}&limit=1`, {
+                signal: AbortSignal.timeout(3000)
+              });
+              const jData = await jRes.json();
+              const jm = jData?.data?.[0];
+              if (jm?.images?.jpg?.large_image_url || jm?.images?.jpg?.image_url) {
+                resolved = {
+                  mal_id: jm.mal_id,
+                  canonical_title: jm.title_english || jm.title || rawTitle,
+                  cover_image_url: jm.images?.jpg?.large_image_url || jm.images?.jpg?.image_url
+                };
+              }
+            } catch (e) {
+              // continue
+            }
+          }
+
+          if (resolved) {
+            if (item.media_metadata) {
+              item.media_metadata.canonical_title = resolved.canonical_title;
+              item.media_metadata.cover_image_url = resolved.cover_image_url;
+              if (resolved.mal_id) item.media_metadata.mal_id = resolved.mal_id;
+              if (resolved.status) item.media_metadata.status = resolved.status;
+              if (resolved.next_airing_episode) item.media_metadata.next_airing_episode = resolved.next_airing_episode;
+              if (resolved.next_airing_at) item.media_metadata.next_airing_at = resolved.next_airing_at;
+            }
+
+            await supabase.from('media_metadata').update({
+              canonical_title: resolved.canonical_title,
+              cover_image_url: resolved.cover_image_url,
+              mal_id: resolved.mal_id || undefined,
+              status: resolved.status || undefined,
+              next_airing_episode: resolved.next_airing_episode || undefined,
+              next_airing_at: resolved.next_airing_at || undefined
+            }).eq('media_id', item.media_id);
+          }
+        } catch (repairErr) {
+          console.warn('[OmniSync] Cover repair error:', repairErr.message);
+        }
+      }));
     }
 
     // Live AniChart / AniList airing schedule batch fetch for anime
