@@ -2,30 +2,72 @@
 // OmniSync Anime Tracker
 // ============================
 
+// Helper to extract cover poster image directly from the streaming page DOM
+function extractDomCover(doc) {
+  try {
+    const og = doc.querySelector('meta[property="og:image"]')?.content ||
+               doc.querySelector('meta[name="twitter:image"]')?.content;
+    if (og && !/logo|favicon|default|banner|avatar/i.test(og) && og.startsWith('http')) {
+      return og;
+    }
+    const selectors = [
+      '.poster img', '.thumbnail img', '.thumb img', '.anime-cover img',
+      '.series-thumb img', '.infox img', '.thumbook img', '.entry-content img',
+      '.entry-header img', '.content-thumb img', '.series-img img',
+      'article img', '.animeinfo img', '.imgdesc img'
+    ];
+    for (const s of selectors) {
+      const el = doc.querySelector(s);
+      const src = el?.src || el?.dataset?.src || el?.getAttribute('data-lazy-src');
+      if (src && !/logo|favicon|default|banner|avatar/i.test(src) && src.startsWith('http')) {
+        return src;
+      }
+    }
+  } catch(e) {}
+  return null;
+}
+
 const ANIME_PATTERNS = {
   "ylnime.com": {
     extract: (url, doc) => {
-      // URL: https://ylnime.com/?series=1piece-sub-indo&episode=al-150441-1180
-      if (url.searchParams.has('series') && url.searchParams.has('episode')) {
-        // Title from series param
-        let title = url.searchParams.get('series').replace(/-/g, ' ');
-        title = title.replace(/ sub ind(o)?/gi, '').trim();
-        
-        // Episode from last number after last dash: "al-150441-1180" -> 1180
-        const epParam = url.searchParams.get('episode');
+      // 1. Episode number
+      let episode = null;
+      const epParam = url.searchParams.get('episode');
+      if (epParam) {
         const epMatch = epParam.match(/-(\d+(?:\.\d)?)$/);
-        const episode = epMatch ? parseFloat(epMatch[1]) : null;
-        
-        if (!episode) return null;
-        return { raw_title: title, progress: episode };
+        if (epMatch) episode = parseFloat(epMatch[1]);
       }
-      // Fallback: try document title
-      // Title format: "Judul Episode XX Subtitle Indonesia | Ylnime"
-      const titleMatch = doc.title.match(/^(.+?)\s+Episode\s+(\d+)/i);
-      if (titleMatch) {
-        return { raw_title: titleMatch[1].trim(), progress: parseFloat(titleMatch[2]) };
+      if (!episode) {
+        const docEpMatch = (doc.title + " " + (doc.querySelector('h1')?.textContent || "")).match(/Episode\s*(\d+(?:\.\d)?)/i);
+        if (docEpMatch) episode = parseFloat(docEpMatch[1]);
       }
-      return null;
+
+      // 2. Title from DOM (heading / breadcrumb / title) — MUCH more accurate than abbreviated URL slug!
+      let title = null;
+      const h1Text = doc.querySelector('h1')?.textContent?.trim();
+      if (h1Text) {
+        title = h1Text
+          .replace(/^(nonton|streaming|download|watch)\s+/i, '')
+          .replace(/\s+Episode\s*\d+.*$/i, '')
+          .replace(/\s+Sub\s*Indo.*$/i, '')
+          .trim();
+      }
+      if (!title || title.length < 3) {
+        const titleMatch = (doc.title || '').match(/(?:nonton|streaming)?\s*(.+?)\s+Episode\s+\d+/i);
+        if (titleMatch) {
+          title = titleMatch[1].replace(/[-|–].*$/g, '').trim();
+        }
+      }
+      // Fallback: URL series query param if DOM didn't yield a good title
+      if (!title && url.searchParams.has('series')) {
+        title = url.searchParams.get('series')
+          .replace(/-/g, ' ')
+          .replace(/\b(sub\s*indo|subtitle\s*indonesia)\b/gi, '')
+          .trim();
+      }
+
+      if (!title || !episode) return null;
+      return { raw_title: title, progress: episode, cover_url: extractDomCover(doc) };
     }
   },
   "animesail": {
@@ -35,19 +77,20 @@ const ANIME_PATTERNS = {
          if (parts.length === 0) return null;
          const slug = parts[parts.length - 1];
          
-         // Try slug first: "one-piece-episode-1180"
          const epMatch = slug.match(/(.+)-episode-(\d+(?:\.\d)?)/);
-         if (epMatch) {
-           const title = epMatch[1].replace(/-/g, ' ');
-           return { raw_title: title, progress: parseFloat(epMatch[2]) };
+         const episode = epMatch ? parseFloat(epMatch[2]) : null;
+
+         let title = null;
+         const h1 = doc.querySelector('h1')?.textContent?.trim();
+         if (h1) {
+           title = h1.replace(/\s+Episode\s*\d+.*$/i, '').replace(/\s+Sub.*$/i, '').trim();
+         }
+         if (!title && epMatch) {
+           title = epMatch[1].replace(/-/g, ' ').replace(/\b(subtitle\s*indonesia|sub\s*indo)\b/gi, '').trim();
          }
          
-         // Fallback: document title 
-         const titleMatch = doc.title.match(/(.+?)\s+Episode\s+(\d+)/i);
-         if (titleMatch) {
-           return { raw_title: titleMatch[1].replace(/[-–]/g, ' ').trim(), progress: parseFloat(titleMatch[2]) };
-         }
-         return null;
+         if (!title || !episode) return null;
+         return { raw_title: title, progress: episode, cover_url: extractDomCover(doc) };
      }
   },
   "otakudesu": {
@@ -57,32 +100,40 @@ const ANIME_PATTERNS = {
        if (parts[0] !== 'episode') return null;
        
        const slug = parts[1] || parts[0]; 
-       // slug: "wpoiec-episode-1180-sub-indo"
-       // Match: everything before "-episode-", then the number, ignore trailing "-sub-indo" etc
        const epMatch = slug.match(/(.+)-episode-(\d+(?:\.\d)?)/);
-       if (epMatch) {
-         let title = epMatch[1].replace(/-/g, ' ');
-         return { raw_title: title.trim(), progress: parseFloat(epMatch[2]) };
+       const episode = epMatch ? parseFloat(epMatch[2]) : null;
+
+       // Check DOM first because slug is often an acronym like "wpoiec"
+       let title = null;
+       const h1 = doc.querySelector('h1.posttl, h1')?.textContent?.trim();
+       if (h1) {
+         title = h1.replace(/\s+Episode\s*\d+.*$/i, '').replace(/\s+Sub.*$/i, '').trim();
        }
-       
-       // Fallback: document title "One Piece Episode 1180 Subtitle Indonesia | Otaku Desu"
-       const titleMatch = doc.title.match(/^(.+?)\s+Episode\s+(\d+)/i);
-       if (titleMatch) {
-         return { raw_title: titleMatch[1].trim(), progress: parseFloat(titleMatch[2]) };
+       if (!title || title.length < 3) {
+         const titleMatch = (doc.title || '').match(/^(.+?)\s+Episode\s+(\d+)/i);
+         if (titleMatch) title = titleMatch[1].trim();
        }
-       return null;
+       if (!title && epMatch) {
+         title = epMatch[1].replace(/-/g, ' ').trim();
+       }
+
+       if (!title || !episode) return null;
+       return { raw_title: title, progress: episode, cover_url: extractDomCover(doc) };
     }
   },
   "gogoanime": {
-    extract: (url) => {
+    extract: (url, doc) => {
        const parts = url.pathname.split('/').filter(Boolean);
        if(parts.length === 0) return null;
        const slug = parts[0];
        const epMatch = slug.match(/(.+)-episode-(\d+(\.\d)?)/);
        if (!epMatch) return null;
        
-       const title = epMatch[1].replace(/-/g, ' ');
-       return { raw_title: title, progress: parseFloat(epMatch[2]) };
+       let title = doc.querySelector('.anime-info a, h1')?.textContent?.trim();
+       if (!title) {
+         title = epMatch[1].replace(/-/g, ' ');
+       }
+       return { raw_title: title, progress: parseFloat(epMatch[2]), cover_url: extractDomCover(doc) };
     }
   },
   "hstream.moe": {
@@ -92,7 +143,9 @@ const ANIME_PATTERNS = {
       const slug = parts[parts.length - 1];
       const epMatch = slug.match(/^(.+?)-(\d+)$/);
       if (!epMatch) return null;
-      return { raw_title: epMatch[1].replace(/-/g, ' '), progress: parseFloat(epMatch[2]) };
+      let title = doc.querySelector('h1')?.textContent?.trim();
+      if (!title) title = epMatch[1].replace(/-/g, ' ');
+      return { raw_title: title, progress: parseFloat(epMatch[2]), cover_url: extractDomCover(doc) };
     }
   },
   "hanime.tv": {
@@ -102,7 +155,9 @@ const ANIME_PATTERNS = {
       const slug = parts[parts.length - 1];
       const epMatch = slug.match(/^(.+?)-(\d+)$/);
       if (!epMatch) return null;
-      return { raw_title: epMatch[1].replace(/-/g, ' '), progress: parseFloat(epMatch[2]) };
+      let title = doc.querySelector('h1')?.textContent?.trim();
+      if (!title) title = epMatch[1].replace(/-/g, ' ');
+      return { raw_title: title, progress: parseFloat(epMatch[2]), cover_url: extractDomCover(doc) };
     }
   }
 };
@@ -129,7 +184,8 @@ function syncAnimeProgress(data) {
       type: "anime",
       raw_title: data.raw_title,
       progress: data.progress,
-      source_url: window.location.href
+      source_url: window.location.href,
+      cover_url: data.cover_url || extractDomCover(document)
   }, (response) => {
        if (chrome.runtime.lastError) {
           console.error("[OmniSync] Message Error:", chrome.runtime.lastError.message);

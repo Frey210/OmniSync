@@ -65,6 +65,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
        raw_title: request.raw_title,
        type: request.type,
        source_url: request.source_url,
+       cover_url: request.cover_url || null,
        [request.type === 'anime' ? 'episode' : 'chapter']: request.progress
     };
 

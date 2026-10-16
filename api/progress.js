@@ -69,8 +69,19 @@ export default async function handler(req, res) {
         if (!rawTitle) return;
 
         try {
-          const clean = rawTitle.replace(/\b(sub\s*indo|subtitle\s*indonesia|season\s*\d+|s\d+|batch)\b/gi, '').trim();
+          const clean = rawTitle
+            .replace(/^#+/, '')
+            .replace(/\b(sub\s*indo|subtitle\s*indonesia|season\s*\d+|s\d+|batch|tamat|lengkap)\b/gi, '')
+            .trim();
           const variations = [clean];
+          
+          // Phonetic typo corrections for Indonesian/Japanese transliterations
+          const withShi = clean.replace(/\b([a-z]+)si\b/gi, '$1shi').replace(/([b-df-hj-np-tv-z])si([aeiou])/gi, '$1shi$2');
+          if (withShi !== clean && !variations.includes(withShi)) variations.push(withShi);
+          const withSh = clean.replace(/sy/gi, 'sh');
+          if (withSh !== clean && !variations.includes(withSh)) variations.push(withSh);
+          const withChi = clean.replace(/\bti([aeiou])/gi, 'chi$1');
+          if (withChi !== clean && !variations.includes(withChi)) variations.push(withChi);
           const splitDai = clean.replace(/\bdai([a-z]+)/gi, 'dai $1');
           if (splitDai !== clean && !variations.includes(splitDai)) variations.push(splitDai);
           const words = clean.split(/\s+/).filter(w => w.length > 2);
@@ -102,7 +113,8 @@ export default async function handler(req, res) {
                     }
                   }`,
                   variables: { s: v, t: (item.media_type || 'anime').toUpperCase() }
-                })
+                }),
+                signal: AbortSignal.timeout(3500)
               });
               const alData = await alRes.json();
               const m = alData?.data?.Page?.media?.[0];
@@ -123,7 +135,33 @@ export default async function handler(req, res) {
             }
           }
 
-          // 2. Fallback to Jikan (MAL API) if AniList still has no match
+          // 2. Fallback to Kitsu API
+          if (!resolved) {
+            for (const v of variations.slice(0, 2)) {
+              try {
+                const kType = (item.media_type || 'anime').toLowerCase();
+                const kRes = await fetch(`https://kitsu.io/api/edge/${kType}?filter[text]=${encodeURIComponent(v)}&page[limit]=1`, {
+                  headers: { 'Accept': 'application/vnd.api+json' },
+                  signal: AbortSignal.timeout(3500)
+                });
+                if (kRes.ok) {
+                  const kData = await kRes.json();
+                  const kItem = kData?.data?.[0];
+                  if (kItem?.attributes?.posterImage) {
+                    const attrs = kItem.attributes;
+                    resolved = {
+                      canonical_title: attrs.canonicalTitle || attrs.titles?.en || rawTitle,
+                      cover_image_url: attrs.posterImage.large || attrs.posterImage.medium || attrs.posterImage.small,
+                      status: attrs.status === 'current' ? 'RELEASING' : (attrs.status === 'finished' ? 'FINISHED' : null)
+                    };
+                    break;
+                  }
+                }
+              } catch (e) {}
+            }
+          }
+
+          // 3. Fallback to Jikan (MAL API) if still no match
           if (!resolved) {
             try {
               const jType = (item.media_type || 'anime').toLowerCase();

@@ -59,14 +59,23 @@ export const PATTERNS = {
   "ylnime.com": {
     type: "anime",
     extract: (url, doc) => {
-      // E.g., /episode/jujutsu-kaisen-episode-4/
-      const parts = url.pathname.split('/').filter(Boolean);
-      if (parts[0] !== 'episode') return null;
-      const slug = parts[1]; // "jujutsu-kaisen-episode-4"
-      if (!slug.includes('-episode-')) return null;
-
-      const title = slug.split('-episode-')[0].replace(/-/g, ' ');
-      const episode = parseFloat(slug.split('-episode-')[1]);
+      // 1. Episode
+      let episode = null;
+      const epParam = url.searchParams.get('episode');
+      if (epParam) {
+        const epMatch = epParam.match(/-(\d+(?:\.\d)?)$/);
+        if (epMatch) episode = parseFloat(epMatch[1]);
+      }
+      if (!episode) {
+        const epMatch = (doc.title || '').match(/Episode\s*(\d+(?:\.\d)?)/i);
+        if (epMatch) episode = parseFloat(epMatch[1]);
+      }
+      // 2. Title from DOM
+      let title = doc.querySelector('h1')?.textContent?.replace(/\s+Episode.*$/i, '')?.trim();
+      if (!title && url.searchParams.has('series')) {
+        title = url.searchParams.get('series').replace(/-/g, ' ').replace(/\b(sub\s*indo|subtitle\s*indonesia)\b/gi, '').trim();
+      }
+      if (!title || !episode) return null;
       return { raw_title: title, progress: episode };
     }
   },
